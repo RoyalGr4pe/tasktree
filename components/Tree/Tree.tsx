@@ -536,13 +536,13 @@ setLabels(body.labels ?? []);
               </svg>
             </button>
             <span className="text-sm font-semibold text-monday-dark">{board.name}</span>
-            <span className="text-xs font-medium text-table-foreground bg-[#e8e8e8] rounded-full px-2 py-0.5 leading-none">
+            <span className="text-xs font-medium text-table-foreground bg-badge-bg rounded-full px-2 py-0.5 leading-none">
               {totalCount}
             </span>
             <div className="flex-1" />
             <button
               onClick={handleAddRoot}
-              className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-table-secondary hover:text-foreground hover:bg-[#e8e8e8] transition-colors"
+              className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-table-secondary hover:text-foreground hover:bg-badge-bg transition-colors"
               title="Add task"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -571,7 +571,7 @@ setLabels(body.labels ?? []);
             if (count === 0) return null;
 
             return (
-              <div key={groupKey} className="rounded-lg overflow-hidden mb-4 bg-white">
+              <div key={groupKey} className="rounded-lg overflow-hidden mb-4 bg-surface">
                 {/* Group header */}
                 <div className="flex items-center gap-2 px-3 h-10 bg-table-header rounded-lg">
                   <button
@@ -591,14 +591,14 @@ setLabels(body.labels ?? []);
 
                   <StatusDot color={color} />
                   <span className="text-sm font-semibold text-monday-dark">{label}</span>
-                  <span className="text-xs font-medium text-[#9ba0aa] bg-[#e8e8e8] rounded-full px-2 py-0.5 leading-none">
+                  <span className="text-xs font-medium text-icon-muted bg-badge-bg rounded-full px-2 py-0.5 leading-none">
                     {count}
                   </span>
 
                   <div className="flex-1" />
                   <button
                     onClick={handleAddRoot}
-                    className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-table-foreground hover:text-foreground hover:bg-[#e8e8e8] transition-colors"
+                    className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-table-foreground hover:text-foreground hover:bg-badge-bg transition-colors"
                     title="Add task"
                   >
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -611,7 +611,7 @@ setLabels(body.labels ?? []);
                 {!isGroupCollapsed && (
                   <>
                     {count === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-6 text-[#9ba0aa]">
+                      <div className="flex flex-col items-center justify-center py-6 text-icon-muted">
                         <p className="text-sm">No tasks yet.</p>
                       </div>
                     ) : (

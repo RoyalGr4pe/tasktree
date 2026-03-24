@@ -27,12 +27,12 @@ export function StatusPickerContent({ taskId, current, onSelect, onClose }: Cont
         <li key={value}>
           <button
             onClick={() => { onSelect(taskId, value); onClose(); }}
-            className="w-full flex items-center gap-3 px-3 py-2 hover:bg-[#f7f8f9] transition-colors rounded-lg"
+            className="w-full flex items-center gap-3 px-3 py-2 hover:bg-node-hover transition-colors rounded-lg"
           >
             <StatusDot color={color} />
             <span className="flex-1 text-sm text-monday-dark text-left">{label}</span>
             {current === value && (
-              <svg className="w-4 h-4 text-[#9ba0aa] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-icon-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
               </svg>
             )}
@@ -78,7 +78,7 @@ export default function StatusPicker({ taskId, current, anchorEl, onSelect, onCl
     <div
       ref={ref}
       style={{ position: 'absolute', top: pos.top, left: pos.left, zIndex: 9999, width: 180 }}
-      className="bg-white border border-[#e0e0e0] rounded-xl shadow-xl overflow-hidden"
+      className="bg-surface-overlay border border-border-input rounded-xl shadow-xl overflow-hidden"
       onPointerDown={(e) => e.stopPropagation()}
     >
       <StatusPickerContent taskId={taskId} current={current} onSelect={onSelect} onClose={onClose} />

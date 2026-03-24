@@ -45,6 +45,19 @@
   --color-table-secondary: var(--table-secondary);
   --color-table-header: var(--table-header);
 
+  /* TaskTree UI chrome — dark-mode-aware */
+  --color-app-bg: var(--app-bg);
+  --color-surface: var(--surface);
+  --color-surface-overlay: var(--surface-overlay);
+  --color-node-hover: var(--node-hover);
+  --color-node-selected: var(--node-selected);
+  --color-badge-bg: var(--badge-bg);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-input: var(--border-input);
+  --color-icon-muted: var(--icon-muted);
+  --color-avatar-border: var(--avatar-border);
+  --color-avatar-overflow-bg: var(--avatar-overflow-bg);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -77,6 +90,19 @@
     --input: oklch(0.922 0 0);
     --ring: oklch(0.708 0 0);
     --radius: 0.5rem;
+
+    /* TaskTree UI chrome — light */
+    --app-bg: #ffffff;
+    --surface: #ffffff;
+    --surface-overlay: #ffffff;
+    --node-hover: #f7f8f9;
+    --node-selected: #e8e8ff;
+    --badge-bg: #e8e8e8;
+    --border-subtle: #e8e8e8;
+    --border-input: #e0e0e0;
+    --icon-muted: #9ba0aa;
+    --avatar-border: #ffffff;
+    --avatar-overflow-bg: #e8e8e8;
   }
 
   .dark {
@@ -98,6 +124,31 @@
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
     --ring: oklch(0.556 0 0);
+
+    /* monday.com design tokens — dark overrides */
+    --color-monday-dark: #e8e9f0;
+    --color-monday-dark-secondary: #9ba0aa;
+    --color-monday-border: #3a3b40;
+    --color-monday-bg-light: #1e1f24;
+    --color-monday-bg-hover: #2a2b30;
+
+    /* shadcn table tokens — dark */
+    --table-foreground: oklch(0.65 0 0);
+    --table-secondary: oklch(0.45 0 0);
+    --table-header: oklch(0.2 0 0);
+
+    /* TaskTree UI chrome — dark */
+    --app-bg: #181b34;
+    --surface: #1e1f24;
+    --surface-overlay: #27282e;
+    --node-hover: #26272d;
+    --node-selected: #2a2b45;
+    --badge-bg: #2e2f36;
+    --border-subtle: #2e2f36;
+    --border-input: #3a3b42;
+    --icon-muted: #676879;
+    --avatar-border: #1e1f24;
+    --avatar-overflow-bg: #2e2f36;
   }
 
   * {
@@ -137,5 +188,5 @@
    -------------------------------------------------------------------------*/
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #c3c6d4; border-radius: 9999px; }
-::-webkit-scrollbar-thumb:hover { background: #676879; }
+::-webkit-scrollbar-thumb { background: var(--color-monday-border); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-monday-dark-secondary); }

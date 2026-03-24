@@ -220,8 +220,8 @@ export default function TreeNode({
                 <ContextMenuTrigger asChild>
                     <div
                         className={[
-                            `group relative flex items-center ${TREE_CONFIG.rowHeight} text-table-foreground rounded-lg bg-white transition-colors duration-75 cursor-default select-none`,
-                            isDropTarget ? 'bg-blue-50' : selectedIds.has(node.id) ? 'bg-[#e8e8ff]' : 'hover:bg-[#f7f8f9]',
+                            `group relative flex items-center ${TREE_CONFIG.rowHeight} text-table-foreground rounded-lg bg-surface transition-colors duration-75 cursor-default select-none`,
+                            isDropTarget ? 'bg-blue-50' : selectedIds.has(node.id) ? 'bg-node-selected' : 'hover:bg-node-hover',
                         ].join(' ')}
                     >
                         {/* Indent for depth */}
@@ -231,7 +231,7 @@ export default function TreeNode({
                         <div
                             {...attributes}
                             {...listeners}
-                            className="shrink-0 w-5 flex items-center justify-center text-[#c8cad0] opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+                            className="shrink-0 w-5 flex items-center justify-center text-icon-muted opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
                         >
                             <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
                                 <circle cx="3" cy="2.5" r="1.2" />
@@ -248,7 +248,7 @@ export default function TreeNode({
                             <Checkbox
                                 checked={selectedIds.has(node.id)}
                                 onCheckedChange={(checked) => onSelect(node.id, !!checked)}
-                                className={`${TREE_CONFIG.checkboxSize} rounded-[3px] border-[#c8cad0] hover:border-table-foreground data-[state=checked]:bg-monday-blue data-[state=checked]:border-monday-blue`}
+                                className={`${TREE_CONFIG.checkboxSize} rounded-[3px] border-icon-muted hover:border-table-foreground data-[state=checked]:bg-monday-blue data-[state=checked]:border-monday-blue`}
                                 onClick={(e) => e.stopPropagation()}
                             />
                         </div>
@@ -259,7 +259,7 @@ export default function TreeNode({
                             tabIndex={-1}
                             className={[
                                 `shrink-0 ${TREE_CONFIG.caretButtonSize} flex items-center justify-center rounded transition-colors`,
-                                hasChildren ? 'hover:bg-[#e8e8e8]' : 'opacity-0 pointer-events-none',
+                                hasChildren ? 'hover:bg-badge-bg' : 'opacity-0 pointer-events-none',
                             ].join(' ')}
                         >
                             <svg
@@ -275,7 +275,7 @@ export default function TreeNode({
                             <button
                                 ref={statusButtonRef}
                                 onClick={() => statusPickerOpenForId === node.id ? onStatusPickerClose() : onStatusPickerOpen(node.id)}
-                                className="flex items-center justify-center w-6 h-6 rounded hover:bg-[#e8e8e8] transition-colors"
+                                className="flex items-center justify-center w-6 h-6 rounded hover:bg-badge-bg transition-colors"
                                 title={STATUSES.find((s) => s.value === node.status)?.label ?? 'No status'}
                             >
                                 <StatusDot color={STATUSES.find((s) => s.value === node.status)?.color ?? '#e0e0e0'} />
@@ -317,7 +317,7 @@ export default function TreeNode({
 
                         {/* Collapsed child count badge */}
                         {hasChildren && !isExpanded && (
-                            <span className={`shrink-0 ${TREE_CONFIG.badgeFontSize} font-medium bg-[#e8e8e8] rounded-full px-1.5 py-0.5 leading-none`}>
+                            <span className={`shrink-0 ${TREE_CONFIG.badgeFontSize} font-medium bg-badge-bg rounded-full px-1.5 py-0.5 leading-none`}>
                                 {node.children.length}
                             </span>
                         )}
@@ -360,7 +360,7 @@ export default function TreeNode({
                                 anchorEl={
                                     <button
                                         ref={dueDateButtonRef}
-                                        className={`flex items-center text-table-foreground font-medium border-table-secondary gap-2 h-7 hover:bg-[#f0f0f0] px-2 rounded-full border-[0.5px] transition-colors text-sm ${!node.due_date ? 'opacity-70' : ''}`}
+                                        className={`flex items-center text-table-foreground font-medium border-table-secondary gap-2 h-7 hover:bg-node-hover px-2 rounded-full border-[0.5px] transition-colors text-sm ${!node.due_date ? 'opacity-70' : ''}`}
                                         title="Set due date"
                                     >
                                         <HiCalendar size={14} className={isOverdue ? 'text-monday-error' : isSoon ? 'text-orange-400' : ''} />
@@ -400,7 +400,7 @@ export default function TreeNode({
                             <button
                                 ref={priorityButtonRef}
                                 onClick={() => priorityPickerOpenForId === node.id ? onPriorityPickerClose() : onPriorityPickerOpen(node.id)}
-                                className="flex items-center justify-center w-6 h-6 rounded hover:bg-[#e8e8e8] transition-colors"
+                                className="flex items-center justify-center w-6 h-6 rounded hover:bg-badge-bg transition-colors"
                                 title={PRIORITIES.find((p) => p.value === (node.priority ?? 'no_priority'))?.label ?? 'No priority'}
                             >
                                 <PriorityIcon priority={(node.priority ?? 'no_priority') as Priority} />
@@ -424,14 +424,14 @@ export default function TreeNode({
                 </ContextMenuTrigger>
 
                 {/* Context menu */}
-                <ContextMenuContent className="w-56 rounded-xl border border-[#e8e8e8] shadow-lg p-1.5">
+                <ContextMenuContent className="w-56 rounded-xl border border-border-subtle shadow-lg p-1.5">
                     {/* Assignee submenu */}
                     <ContextMenuSub>
                         <ContextMenuSubTrigger className={`${TREE_CONFIG.fontSize} gap-2 rounded-lg px-2 py-1.5`}>
                             <AssigneeCtxIcon />
                             <span className="flex-1">Assignee</span>
                         </ContextMenuSubTrigger>
-                        <ContextMenuSubContent className="w-64 rounded-xl border border-[#e8e8e8] shadow-lg p-0 overflow-hidden">
+                        <ContextMenuSubContent className="w-64 rounded-xl border border-border-subtle shadow-lg p-0 overflow-hidden">
                             <AssigneePickerContent
                                 taskId={node.id}
                                 workspaceId={workspaceId}
@@ -450,7 +450,7 @@ export default function TreeNode({
                             <StatusDot color={STATUSES.find((s) => s.value === node.status)?.color ?? '#e0e0e0'} />
                             <span className="flex-1">Status</span>
                         </ContextMenuSubTrigger>
-                        <ContextMenuSubContent className="w-48 rounded-xl border border-[#e8e8e8] shadow-lg p-0 overflow-hidden">
+                        <ContextMenuSubContent className="w-48 rounded-xl border border-border-subtle shadow-lg p-0 overflow-hidden">
                             <StatusPickerContent
                                 taskId={node.id}
                                 current={node.status as Status | null}
@@ -466,7 +466,7 @@ export default function TreeNode({
                             <PriorityIcon priority={(node.priority ?? 'no_priority') as Priority} />
                             <span className="flex-1">Priority</span>
                         </ContextMenuSubTrigger>
-                        <ContextMenuSubContent className="w-52 rounded-xl border border-[#e8e8e8] shadow-lg p-0 overflow-hidden">
+                        <ContextMenuSubContent className="w-52 rounded-xl border border-border-subtle shadow-lg p-0 overflow-hidden">
                             <PriorityPickerContent
                                 taskId={node.id}
                                 current={(node.priority ?? 'no_priority') as Priority}
@@ -482,7 +482,7 @@ export default function TreeNode({
                             <LabelCtxIcon />
                             <span className="flex-1">Labels</span>
                         </ContextMenuSubTrigger>
-                        <ContextMenuSubContent className="w-56 rounded-xl border border-[#e8e8e8] shadow-lg p-0 overflow-hidden">
+                        <ContextMenuSubContent className="w-56 rounded-xl border border-border-subtle shadow-lg p-0 overflow-hidden">
                             <LabelPickerContent
                                 taskId={node.id}
                                 plan={plan}

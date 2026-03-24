@@ -61,7 +61,7 @@ export default function BoardSelector({
   const isEmpty = boards.length === 0;
 
   return (
-    <main className="min-h-screen bg-[#f6f7fb] font-sans text-monday-dark flex flex-col">
+    <main className="min-h-screen bg-app-bg font-sans text-monday-dark flex flex-col">
 
       <div className="flex-1 flex flex-col items-center justify-start pt-10 pb-16 px-4">
 
@@ -89,7 +89,7 @@ export default function BoardSelector({
                   onClick={() => onSelectBoard(board)}
                   onMouseEnter={() => setHoveredId(board.id)}
                   onMouseLeave={() => setHoveredId(null)}
-                  className="group relative text-left bg-white border border-[#e6e9ef] rounded-xl p-4 transition-all duration-150 hover:border-monday-blue/40 hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-monday-blue/40"
+                  className="group relative text-left bg-surface border border-border-subtle rounded-xl p-4 transition-all duration-150 hover:border-monday-blue/40 hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-monday-blue/40"
                 >
                   <div className="flex items-start gap-3">
                     {/* Color avatar */}
@@ -124,7 +124,7 @@ export default function BoardSelector({
         {/* Empty state */}
         {isEmpty && (
           <div className="w-full max-w-sm mb-6">
-            <div className="bg-white border-2 border-dashed border-[#dde1ed] rounded-2xl px-8 py-12 flex flex-col items-center text-center">
+            <div className="bg-surface border-2 border-dashed border-border-subtle rounded-2xl px-8 py-12 flex flex-col items-center text-center">
               <div className="w-14 h-14 rounded-2xl bg-monday-blue/10 flex items-center justify-center mb-4">
                 <svg className="w-7 h-7 text-monday-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -155,7 +155,7 @@ export default function BoardSelector({
           {/* Plan usage */}
           {limits.maxBoards !== Infinity && (
             <div className="flex items-center justify-between mt-3 px-1">
-              <div className="flex-1 h-1 bg-[#e6e9ef] rounded-full overflow-hidden mr-3">
+              <div className="flex-1 h-1 bg-badge-bg rounded-full overflow-hidden mr-3">
                 <div
                   className="h-full bg-monday-blue rounded-full transition-all"
                   style={{ width: `${Math.min(100, (boards.length / limits.maxBoards) * 100)}%` }}

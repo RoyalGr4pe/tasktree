@@ -80,7 +80,7 @@ export function LabelPickerContent({
     <>
       <ul className="p-1 max-h-48 overflow-y-auto">
         {labels.length === 0 && !creating && (
-          <li className="px-3 py-2 text-xs text-[#9ba0aa]">No labels yet</li>
+          <li className="px-3 py-2 text-xs text-icon-muted">No labels yet</li>
         )}
         {labels.map((label) => {
           const active = assignedLabelIds.includes(label.id);
@@ -91,12 +91,12 @@ export function LabelPickerContent({
                 onClick={() => toggleLabel(label.id)}
                 disabled={disabled}
                 title={disabled ? 'Upgrade to add multiple labels' : undefined}
-                className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-colors ${disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-[#f7f8f9]'}`}
+                className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-colors ${disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-node-hover'}`}
               >
                 <LabelDot color={label.color} />
                 <span className="flex-1 text-sm text-monday-dark text-left">{label.name}</span>
                 {active && (
-                  <svg className="w-4 h-4 text-[#9ba0aa] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-icon-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                   </svg>
                 )}
@@ -106,7 +106,7 @@ export function LabelPickerContent({
         })}
       </ul>
 
-      <div className="border-t border-[#f0f0f0]">
+      <div className="border-t border-border-subtle">
         {creating ? (
           <div className="p-2 flex flex-col gap-2">
             <input
@@ -118,7 +118,7 @@ export function LabelPickerContent({
                 if (e.key === 'Escape') { setCreating(false); setNewName(''); }
               }}
               placeholder="Label name"
-              className="w-full text-sm px-2 py-1 border border-[#e0e0e0] rounded-lg outline-none focus:border-[#9ba0aa]"
+              className="w-full text-sm px-2 py-1 border border-border-input rounded-lg outline-none focus:border-icon-muted bg-transparent"
             />
             <div className="flex gap-1 flex-wrap">
               {PRESET_COLORS.map((c) => (
@@ -126,7 +126,7 @@ export function LabelPickerContent({
                   key={c}
                   onClick={() => setNewColor(c)}
                   style={{ background: c }}
-                  className={`w-5 h-5 rounded-full transition-transform ${newColor === c ? 'ring-2 ring-offset-1 ring-[#555] scale-110' : ''}`}
+                  className={`w-5 h-5 rounded-full transition-transform ${newColor === c ? 'ring-2 ring-offset-1 ring-foreground/50 scale-110' : ''}`}
                 />
               ))}
             </div>
@@ -140,7 +140,7 @@ export function LabelPickerContent({
               </button>
               <button
                 onClick={() => { setCreating(false); setNewName(''); }}
-                className="flex-1 text-xs border border-[#e0e0e0] rounded-lg py-1 hover:bg-[#f7f8f9] transition-colors"
+                className="flex-1 text-xs border border-border-input rounded-lg py-1 hover:bg-node-hover transition-colors"
               >
                 Cancel
               </button>
@@ -149,7 +149,7 @@ export function LabelPickerContent({
         ) : (
           <button
             onClick={() => setCreating(true)}
-            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[#9ba0aa] hover:bg-[#f7f8f9] hover:text-monday-dark transition-colors"
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-icon-muted hover:bg-node-hover hover:text-monday-dark transition-colors"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -196,7 +196,7 @@ export default function LabelPicker({
     <div
       ref={ref}
       style={{ position: 'absolute', top: pos.top, left: pos.left, zIndex: 9999, width: 220 }}
-      className="bg-white border border-[#e0e0e0] rounded-xl shadow-xl overflow-hidden"
+      className="bg-surface-overlay border border-border-input rounded-xl shadow-xl overflow-hidden"
       onPointerDown={(e) => e.stopPropagation()}
     >
       <LabelPickerContent {...contentProps} />

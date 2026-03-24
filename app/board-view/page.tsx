@@ -128,7 +128,7 @@ export default function BoardViewPage() {
   if (phase === 'error') {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
-        <div className="p-5 rounded-lg bg-red-50 border border-red-200 text-red-800 max-w-sm w-full mx-4">
+        <div className="p-5 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive max-w-sm w-full mx-4">
           <p className="font-semibold text-sm mb-1">Something went wrong</p>
           <p className="text-sm">{errorMessage}</p>
           <button
@@ -141,7 +141,7 @@ export default function BoardViewPage() {
                 setPhase('error');
               });
             }}
-            className="mt-3 px-3 py-1.5 text-sm font-medium text-white bg-[#0073ea] rounded hover:bg-[#0060c0] transition-colors"
+            className="mt-3 px-3 py-1.5 text-sm font-medium text-white bg-monday-blue rounded hover:bg-monday-blue-hover transition-colors"
           >
             Retry
           </button>
