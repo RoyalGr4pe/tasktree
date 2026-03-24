@@ -1,0 +1,26 @@
+{
+  "app_name": "TaskTree",
+  "app_description": "Unlimited task hierarchy for monday.com boards",
+  "app_version": "1.0.0",
+  "features": [
+    {
+      "type": "BoardView",
+      "name": "TaskTree",
+      "url": "https://your-domain.vercel.app/board-view",
+      "description": "Visual tree view for deep task hierarchies",
+      "settings": {
+        "iframe_url": "https://your-domain.vercel.app/board-view"
+      }
+    }
+  ],
+  "permissions": [
+    "boards:read",
+    "items:read",
+    "items:write"
+  ],
+  "oauth": {
+    "redirect_urls": [
+      "https://your-domain.vercel.app/api/auth/callback"
+    ]
+  }
+}
