@@ -16,6 +16,8 @@ const MESSAGES: Record<PlanLimitError, (plan: Plan) => string> = {
     `You've reached the ${PLAN_LIMITS[plan].maxTasksPerBoard}-task limit on the ${plan} plan.`,
   depth_limit_reached: (plan) =>
     `The ${plan} plan supports a maximum nesting depth of ${PLAN_LIMITS[plan].maxDepth}.`,
+  assignee_limit_reached: (plan) =>
+    `You've reached the assignee limit on the ${plan} plan.`,
 };
 
 export default function PlanLimitBanner({ error, plan, onDismiss }: PlanLimitBannerProps) {

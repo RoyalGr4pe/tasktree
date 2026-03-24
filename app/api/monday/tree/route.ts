@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, supabaseAdmin } from '@/lib/supabase';
 import type { DbNode } from '@/lib/supabase';
 import { deleteItem } from '@/lib/monday';
-import type { SyncNodesPayload, PatchNodePayload } from '@/types';
+type SyncNodesPayload = { board_id: string; items: { id: string }[] };
+type PatchNodePayload = { id: string; parent_node_id: string | null; position: number; depth: number };
 
 // ---------------------------------------------------------------------------
 // GET /api/monday/tree?board_id=xxx

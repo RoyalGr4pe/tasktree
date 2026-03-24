@@ -1,4 +1,7 @@
-import type { Node, TreeNode } from '@/types';
+import type { Task, TreeTask as TreeNode } from '@/types';
+
+// Alias for internal use throughout this file
+type Node = Task;
 
 // ---------------------------------------------------------------------------
 // buildTree
@@ -152,17 +155,9 @@ export function reorderNodes({
 
   siblings.forEach((sibling, idx) => {
     const node = nodeMap.get(sibling.id)!;
-    const newDepth = calculateDepth(sibling.id === activeId ? activeId : sibling.id, [
-      ...nodeMap.values(),
-      // temporary update so calculateDepth can walk correctly
-      { ...active, parent_node_id: newParentId },
-    ]);
-
     const depthForActive = newParentId
       ? calculateDepth(newParentId, nodes) + 1
       : 0;
-
-    const finalDepth = sibling.id === activeId ? depthForActive : node.depth;
     const positionChanged = node.position !== idx;
     const parentChanged = sibling.id === activeId && node.parent_node_id !== newParentId;
 
