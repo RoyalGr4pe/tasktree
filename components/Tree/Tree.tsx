@@ -23,6 +23,7 @@ import { StatusDot } from '@/components/StatusPicker';
 import { buildTree, flattenTree, reorderNodes } from '@/lib/tree-utils';
 import TreeNode from './TreeNode';
 import DragLayer from './DragLayer';
+import FilterBar, { EMPTY_FILTERS, type ActiveFilters } from './FilterBar';
 import PlanLimitBanner from '@/components/PlanLimitBanner';
 import {
   AlertDialog,
@@ -40,11 +41,13 @@ interface TreeProps {
   board: Board;
   workspace: Workspace;
   onBack: () => void;
+  onBoardRenamed: (board: Board) => void;
+  onBoardDeleted: (boardId: string) => void;
+  onTaskCountChanged?: (boardId: string, count: number) => void;
 }
 
-// Status groups in display order. null status tasks fall into the Backlog group.
+// Status groups in display order. null status tasks are treated as 'backlog'.
 const STATUS_GROUPS: Array<{ status: Status | null; label: string; color: string }> = [
-  { status: null,          label: 'Backlog',      color: '#9ba0aa' },
   { status: 'backlog',     label: 'Backlog',      color: '#9ba0aa' },
   { status: 'todo',        label: 'To Do',        color: '#6366f1' },
   { status: 'in_progress', label: 'In Progress',  color: '#f0c446' },
@@ -52,18 +55,30 @@ const STATUS_GROUPS: Array<{ status: Status | null; label: string; color: string
   { status: 'done',        label: 'Done',         color: '#22c55e' },
 ];
 
-export default function Tree({ initialTasks, board, workspace, onBack }: TreeProps) {
+export default function Tree({ initialTasks, board, workspace, onBack, onBoardRenamed, onBoardDeleted, onTaskCountChanged }: TreeProps) {
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
+
+  useEffect(() => {
+    onTaskCountChanged?.(board.id, tasks.length);
+  }, [tasks.length, board.id]);
+
   const [activeNode, setActiveNode] = useState<TreeTask | null>(null);
   const [overNodeId, setOverNodeId] = useState<string | null>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<{ nodeId: string; hasChildren: boolean } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ nodeId: string; nodeIds: string[]; hasChildren: boolean } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [limitError, setLimitError] = useState<PlanLimitError | null>(null);
+  const [filters, setFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
+
+  // Board rename/delete
+  const [boardName, setBoardName] = useState(board.name);
+  const [isRenamingBoard, setIsRenamingBoard] = useState(false);
+  const [boardRenameValue, setBoardRenameValue] = useState(board.name);
+  const [pendingDeleteBoard, setPendingDeleteBoard] = useState(false);
 
   // Assignees: map of taskId → userId[]
   const [assigneeMap, setAssigneeMap] = useState<Record<string, string[]>>({});
@@ -176,16 +191,147 @@ setLabels(body.labels ?? []);
     }).catch((err) => console.error('[Tree] Failed to persist due date:', err));
   }, []);
 
+  const handleBulkStatusChange = useCallback(async (status: Status | null) => {
+    const ids = [...selectedIds].filter((id) => !id.startsWith('__temp__'));
+    setTasks((prev) => prev.map((t) => ids.includes(t.id) ? { ...t, status } : t));
+    await Promise.all(ids.map((id) =>
+      fetch(`/api/tasks/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      }).catch((err) => console.error('[Tree] Failed to bulk patch status:', id, err))
+    ));
+  }, [selectedIds]);
+
+  const handleBulkPriorityChange = useCallback(async (priority: Priority) => {
+    const normalised = priority === 'no_priority' ? null : priority;
+    const ids = [...selectedIds].filter((id) => !id.startsWith('__temp__'));
+    setTasks((prev) => prev.map((t) => ids.includes(t.id) ? { ...t, priority: normalised } : t));
+    await Promise.all(ids.map((id) =>
+      fetch(`/api/tasks/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priority: normalised }),
+      }).catch((err) => console.error('[Tree] Failed to bulk patch priority:', id, err))
+    ));
+  }, [selectedIds]);
+
+  const handleBulkLabelsChange = useCallback(async (labelIds: string[]) => {
+    const ids = [...selectedIds].filter((id) => !id.startsWith('__temp__'));
+    setLabelMap((prev) => {
+      const next = { ...prev };
+      ids.forEach((id) => { next[id] = labelIds; });
+      return next;
+    });
+    await Promise.all(ids.map((id) =>
+      fetch('/api/task-labels', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: id, board_id: board.id, label_ids: labelIds }),
+      }).catch((err) => console.error('[Tree] Failed to bulk patch labels:', id, err))
+    ));
+  }, [selectedIds, board.id]);
+
+  const handleBulkAssigneesChange = useCallback(async (userIds: string[]) => {
+    const ids = [...selectedIds].filter((id) => !id.startsWith('__temp__'));
+    setAssigneeMap((prev) => {
+      const next = { ...prev };
+      ids.forEach((id) => { next[id] = userIds; });
+      return next;
+    });
+    // For assignees, use the existing per-task assign endpoint for each selected task
+    // We unassign all then reassign — simplest approach:
+    await Promise.all(ids.map(async (taskId) => {
+      const current = assigneeMap[taskId] ?? [];
+      // Remove users not in new list
+      await Promise.all(
+        current.filter((uid) => !userIds.includes(uid)).map((uid) =>
+          fetch(`/api/tasks/${taskId}/assign/${uid}`, { method: 'DELETE' })
+            .catch((err) => console.error('[Tree] Failed to bulk unassign:', taskId, uid, err))
+        )
+      );
+      // Add users not already assigned
+      await Promise.all(
+        userIds.filter((uid) => !current.includes(uid)).map((uid) =>
+          fetch(`/api/tasks/${taskId}/assign`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: uid, workspaceId: workspace.id }),
+          }).catch((err) => console.error('[Tree] Failed to bulk assign:', taskId, uid, err))
+        )
+      );
+    }));
+  }, [selectedIds, assigneeMap, workspace.id]);
+
   // ---------------------------------------------------------------------------
   // Derived tree data — grouped by root task status
   // ---------------------------------------------------------------------------
+
+  // Apply filters — keep a task if it matches, and always keep its ancestors/descendants
+  const filteredTasks = useMemo(() => {
+    const { assigneeIds, priorities, labelIds, dueDateRange } = filters;
+    const hasFilters = assigneeIds.length > 0 || priorities.length > 0 || labelIds.length > 0 || dueDateRange !== null;
+    if (!hasFilters) return tasks;
+
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(today); weekEnd.setDate(today.getDate() + 7);
+
+    function taskMatches(t: Task): boolean {
+      if (assigneeIds.length > 0) {
+        const taskAssignees = assigneeMap[t.id] ?? [];
+        if (!assigneeIds.some((id) => taskAssignees.includes(id))) return false;
+      }
+      if (priorities.length > 0) {
+        const p = t.priority ?? 'no_priority';
+        if (!priorities.includes(p as typeof priorities[number])) return false;
+      }
+      if (labelIds.length > 0) {
+        const taskLabels = labelMap[t.id] ?? [];
+        if (!labelIds.some((id) => taskLabels.includes(id))) return false;
+      }
+      if (dueDateRange !== null) {
+        if (!t.due_date) return false;
+        const due = new Date(t.due_date); due.setHours(0, 0, 0, 0);
+        if (dueDateRange === 'overdue' && due >= today) return false;
+        if (dueDateRange === 'today' && due.getTime() !== today.getTime()) return false;
+        if (dueDateRange === 'this_week' && (due < today || due > weekEnd)) return false;
+      }
+      return true;
+    }
+
+    // Collect matching IDs, then expand to include all ancestors and descendants
+    const matchingIds = new Set(tasks.filter(taskMatches).map((t) => t.id));
+
+    // Add all ancestors of matching tasks
+    const idToTask = new Map(tasks.map((t) => [t.id, t]));
+    for (const id of [...matchingIds]) {
+      let t = idToTask.get(id);
+      while (t?.parent_task_id) {
+        matchingIds.add(t.parent_task_id);
+        t = idToTask.get(t.parent_task_id);
+      }
+    }
+
+    // Add all descendants of matching tasks
+    function addDescendants(id: string) {
+      for (const t of tasks) {
+        if (t.parent_task_id === id && !matchingIds.has(t.id)) {
+          matchingIds.add(t.id);
+          addDescendants(t.id);
+        }
+      }
+    }
+    for (const id of [...matchingIds]) addDescendants(id);
+
+    return tasks.filter((t) => matchingIds.has(t.id));
+  }, [tasks, filters, assigneeMap, labelMap]);
 
   /**
    * Build the full tree and group ROOT tasks by their status.
    * Subtasks always travel with their root ancestor's group.
    */
   const groupedTrees = useMemo(() => {
-    const raw = buildTree(tasks);
+    const raw = buildTree(filteredTasks);
 
     const applyCollapse = (arr: TreeTask[]): TreeTask[] =>
       arr.map((n) => ({
@@ -196,18 +342,18 @@ setLabels(body.labels ?? []);
 
     const withExpand = applyCollapse(raw);
 
-    // Group root tasks by their own status
+    // Group root tasks by their own status (null → 'backlog')
     const groups = new Map<Status | null, TreeTask[]>();
     for (const statusGroup of STATUS_GROUPS) {
       groups.set(statusGroup.status, []);
     }
     for (const rootNode of withExpand) {
-      const s = (rootNode.status ?? null) as Status | null;
+      const s = (rootNode.status ?? 'backlog') as Status;
       if (!groups.has(s)) groups.set(s, []);
       groups.get(s)!.push(rootNode);
     }
     return groups;
-  }, [tasks, collapsedIds]);
+  }, [filteredTasks, collapsedIds]);
 
   // Flat list per group (for DnD sortable IDs)
   const flatListByGroup = useMemo(() => {
@@ -318,7 +464,7 @@ setLabels(body.labels ?? []);
   // Create task
   // ---------------------------------------------------------------------------
 
-  async function createTask(parentTaskId: string | null) {
+  async function createTask(parentTaskId: string | null, initialStatus: Status | null = null) {
     // Optimistic: insert a placeholder immediately so the UI responds instantly
     const tempId = `__temp__${Date.now()}`;
     const parent = parentTaskId ? tasks.find((t) => t.id === parentTaskId) : null;
@@ -334,7 +480,7 @@ setLabels(body.labels ?? []);
       position: siblings.length,
       depth: parent ? parent.depth + 1 : 0,
       priority: null,
-      status: null,
+      status: initialStatus,
       due_date: null,
       created_at: new Date().toISOString(),
       linked_monday_item_id: null,
@@ -360,6 +506,7 @@ setLabels(body.labels ?? []);
         workspace_id: workspace.id,
         parent_task_id: parentTaskId,
         title: '',
+        status: initialStatus,
       }),
     });
 
@@ -386,8 +533,8 @@ setLabels(body.labels ?? []);
     setEditingNodeId(newTask.id);
   }
 
-  const handleAddRoot = useCallback(() => {
-    createTask(null).catch((err) => console.error('[Tree] Failed to add root task:', err));
+  const handleAddRoot = useCallback((status: Status | null = null) => {
+    createTask(null, status).catch((err) => console.error('[Tree] Failed to add root task:', err));
   }, [board.id, workspace.id]);
 
   const handleAddChild = useCallback((parentNodeId: string) => {
@@ -399,28 +546,36 @@ setLabels(body.labels ?? []);
   // ---------------------------------------------------------------------------
 
   const handleDelete = useCallback((nodeId: string, hasChildren: boolean) => {
-    setPendingDelete({ nodeId, hasChildren });
-  }, []);
+    // If the right-clicked node is part of the selection, delete all selected; otherwise just this one
+    const nodeIds = selectedIds.has(nodeId) ? [...selectedIds] : [nodeId];
+    const anyHasChildren = nodeIds.some((id) => tasks.some((t) => t.parent_task_id === id));
+    setPendingDelete({ nodeId, nodeIds, hasChildren: hasChildren || anyHasChildren });
+  }, [selectedIds, tasks]);
 
   const confirmDelete = useCallback(async () => {
     if (!pendingDelete) return;
-    const { nodeId } = pendingDelete;
+    const { nodeIds } = pendingDelete;
     setPendingDelete(null);
 
     const collectIds = (id: string): string[] => {
       const children = tasks.filter((n) => n.parent_task_id === id);
       return [id, ...children.flatMap((c) => collectIds(c.id))];
     };
-    const idsToRemove = new Set(collectIds(nodeId));
+    const idsToRemove = new Set(nodeIds.flatMap((id: string) => collectIds(id)));
 
     setTasks((prev) => prev.filter((n) => !idsToRemove.has(n.id)));
+    setSelectedIds(new Set());
 
     try {
-      const res = await fetch(`/api/tasks/${nodeId}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(err.error ?? 'Delete failed');
-      }
+      await Promise.all(
+        nodeIds.map(async (id) => {
+          const res = await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: res.statusText }));
+            throw new Error(err.error ?? 'Delete failed');
+          }
+        })
+      );
     } catch (err) {
       console.error('[Tree] Delete failed, restoring tasks:', err);
       setTasks(tasks);
@@ -465,6 +620,34 @@ setLabels(body.labels ?? []);
   );
 
   // ---------------------------------------------------------------------------
+  // Board rename / delete
+  // ---------------------------------------------------------------------------
+
+  const commitBoardRename = useCallback(async () => {
+    const trimmed = boardRenameValue.trim();
+    setIsRenamingBoard(false);
+    if (!trimmed || trimmed === boardName) return;
+    setBoardName(trimmed);
+    const res = await fetch(`/api/boards/${board.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: trimmed }),
+    });
+    if (res.ok) {
+      const { board: updated } = await res.json();
+      onBoardRenamed(updated);
+    } else {
+      setBoardName(boardName); // revert
+    }
+  }, [boardRenameValue, boardName, board.id, onBoardRenamed]);
+
+  const confirmDeleteBoard = useCallback(async () => {
+    setPendingDeleteBoard(false);
+    await fetch(`/api/boards/${board.id}`, { method: 'DELETE' });
+    onBoardDeleted(board.id);
+  }, [board.id, onBoardDeleted]);
+
+  // ---------------------------------------------------------------------------
   // Shared props for TreeNode
   // ---------------------------------------------------------------------------
 
@@ -505,6 +688,10 @@ setLabels(body.labels ?? []);
     onLabelPickerClose: () => setLabelPickerTaskId(null),
     onLabelsChange: handleLabelsChange,
     onCreateLabel: handleCreateLabel,
+    onBulkStatusChange: handleBulkStatusChange,
+    onBulkPriorityChange: handleBulkPriorityChange,
+    onBulkLabelsChange: handleBulkLabelsChange,
+    onBulkAssigneesChange: handleBulkAssigneesChange,
   };
 
   // ---------------------------------------------------------------------------
@@ -535,14 +722,42 @@ setLabels(body.labels ?? []);
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <span className="text-sm font-semibold text-monday-dark">{board.name}</span>
-            <span className="text-xs font-medium text-table-foreground bg-[#e8e8e8] rounded-full px-2 py-0.5 leading-none">
+
+            {isRenamingBoard ? (
+              <input
+                autoFocus
+                value={boardRenameValue}
+                onChange={(e) => setBoardRenameValue(e.target.value)}
+                onBlur={commitBoardRename}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitBoardRename();
+                  if (e.key === 'Escape') { setIsRenamingBoard(false); setBoardRenameValue(boardName); }
+                }}
+                className="text-sm font-semibold text-monday-dark bg-transparent border-b border-monday-blue outline-none w-48"
+              />
+            ) : (
+              <span
+                className="text-sm font-semibold text-monday-dark cursor-pointer hover:text-monday-blue transition-colors"
+                onDoubleClick={() => { setBoardRenameValue(boardName); setIsRenamingBoard(true); }}
+                title="Double-click to rename"
+              >
+                {boardName}
+              </span>
+            )}
+
+            <span className="text-xs font-medium text-table-foreground bg-badge-bg rounded-full px-2 py-0.5 leading-none">
               {totalCount}
             </span>
             <div className="flex-1" />
+            <FilterBar
+              filters={filters}
+              onChange={setFilters}
+              mondayUsers={mondayUsers}
+              labels={labels}
+            />
             <button
-              onClick={handleAddRoot}
-              className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-table-secondary hover:text-foreground hover:bg-[#e8e8e8] transition-colors"
+              onClick={() => handleAddRoot(null)}
+              className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-table-secondary hover:text-foreground hover:bg-badge-bg transition-colors"
               title="Add task"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -561,6 +776,43 @@ setLabels(body.labels ?? []);
           )}
 
           {/* Status groups */}
+          {/* Empty states */}
+          {tasks.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+              <svg className="w-12 h-12 text-border-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-monday-dark">No tasks yet</p>
+                <p className="text-xs text-icon-muted mt-0.5">Add your first task to get started</p>
+              </div>
+              <button
+                onClick={() => handleAddRoot(null)}
+                className="mt-1 px-3 py-1.5 text-xs font-medium text-white bg-monday-blue rounded-lg hover:bg-monday-blue-hover transition-colors"
+              >
+                Add task
+              </button>
+            </div>
+          )}
+
+          {tasks.length > 0 && filteredTasks.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+              <svg className="w-12 h-12 text-border-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-monday-dark">No matching tasks</p>
+                <p className="text-xs text-icon-muted mt-0.5">Try adjusting your filters</p>
+              </div>
+              <button
+                onClick={() => setFilters(EMPTY_FILTERS)}
+                className="mt-1 px-3 py-1.5 text-xs font-medium text-monday-blue bg-monday-blue/10 rounded-lg hover:bg-monday-blue/20 transition-colors"
+              >
+                Clear filters
+              </button>
+            </div>
+          )}
+
           {STATUS_GROUPS.map(({ status, label, color }) => {
             const groupKey = status ?? '__null__';
             const rootNodes = groupedTrees.get(status) ?? [];
@@ -571,7 +823,7 @@ setLabels(body.labels ?? []);
             if (count === 0) return null;
 
             return (
-              <div key={groupKey} className="rounded-lg overflow-hidden mb-4 bg-white">
+              <div key={groupKey} className="rounded-lg overflow-hidden mb-4 bg-surface">
                 {/* Group header */}
                 <div className="flex items-center gap-2 px-3 h-10 bg-table-header rounded-lg">
                   <button
@@ -591,14 +843,14 @@ setLabels(body.labels ?? []);
 
                   <StatusDot color={color} />
                   <span className="text-sm font-semibold text-monday-dark">{label}</span>
-                  <span className="text-xs font-medium text-[#9ba0aa] bg-[#e8e8e8] rounded-full px-2 py-0.5 leading-none">
+                  <span className="text-xs font-medium text-icon-muted bg-badge-bg rounded-full px-2 py-0.5 leading-none">
                     {count}
                   </span>
 
                   <div className="flex-1" />
                   <button
-                    onClick={handleAddRoot}
-                    className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-table-foreground hover:text-foreground hover:bg-[#e8e8e8] transition-colors"
+                    onClick={() => handleAddRoot(status)}
+                    className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-table-foreground hover:text-foreground hover:bg-badge-bg transition-colors"
                     title="Add task"
                   >
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -611,7 +863,7 @@ setLabels(body.labels ?? []);
                 {!isGroupCollapsed && (
                   <>
                     {count === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-6 text-[#9ba0aa]">
+                      <div className="flex flex-col items-center justify-center py-6 text-icon-muted">
                         <p className="text-sm">No tasks yet.</p>
                       </div>
                     ) : (
@@ -635,6 +887,26 @@ setLabels(body.labels ?? []);
 
         <DragLayer activeNode={activeNode} />
       </DndContext>
+
+      <AlertDialog open={pendingDeleteBoard} onOpenChange={(open) => { if (!open) setPendingDeleteBoard(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete &quot;{boardName}&quot;?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this board and all its tasks. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteBoard}
+              className="bg-monday-error hover:bg-monday-error/90 text-white"
+            >
+              Delete board
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={!!pendingDelete} onOpenChange={(open) => { if (!open) setPendingDelete(null); }}>
         <AlertDialogContent>

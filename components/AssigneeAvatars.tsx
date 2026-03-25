@@ -52,7 +52,7 @@ export default function AssigneeAvatars({
           <Avatar key={user.id} user={user} />
         ))}
         {overflow > 0 && (
-          <div className="w-6 h-6 rounded-full bg-[#e8e8e8] border-2 border-white flex items-center justify-center text-[9px] font-semibold text-[#676879] z-10">
+          <div className="w-6 h-6 rounded-full bg-avatar-overflow-bg border-2 border-avatar-border flex items-center justify-center text-[9px] font-semibold text-monday-dark-secondary z-10">
             +{overflow}
           </div>
         )}
@@ -68,7 +68,7 @@ function Avatar({ user }: { user: MondayUser }) {
         src={user.avatar}
         alt={user.name}
         title={user.name}
-        className="w-6 h-6 rounded-full border-2 border-white object-cover"
+        className="w-6 h-6 rounded-full border-2 border-avatar-border object-cover"
       />
     );
   }
@@ -84,7 +84,7 @@ function Avatar({ user }: { user: MondayUser }) {
   return (
     <div
       title={user.name}
-      className="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-[9px] font-bold text-white"
+      className="w-6 h-6 rounded-full border-2 border-avatar-border flex items-center justify-center text-[9px] font-bold text-white"
       style={{ backgroundColor: stringToColor(user.id) }}
     >
       {initials}

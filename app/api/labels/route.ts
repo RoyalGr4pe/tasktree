@@ -44,7 +44,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ labels: seeded ?? [] });
   }
 
-  return NextResponse.json({ labels: data });
+  // Deduplicate by name (keep earliest created_at) in case of duplicate seeding
+  const seen = new Set<string>();
+  const deduped = data.filter((l) => {
+    if (seen.has(l.name)) return false;
+    seen.add(l.name);
+    return true;
+  });
+
+  return NextResponse.json({ labels: deduped });
 }
 
 // ---------------------------------------------------------------------------

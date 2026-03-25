@@ -45,6 +45,19 @@
   --color-table-secondary: var(--table-secondary);
   --color-table-header: var(--table-header);
 
+  /* TaskTree UI chrome — dark-mode-aware */
+  --color-app-bg: var(--app-bg);
+  --color-surface: var(--surface);
+  --color-surface-overlay: var(--surface-overlay);
+  --color-node-hover: var(--node-hover);
+  --color-node-selected: var(--node-selected);
+  --color-badge-bg: var(--badge-bg);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-input: var(--border-input);
+  --color-icon-muted: var(--icon-muted);
+  --color-avatar-border: var(--avatar-border);
+  --color-avatar-overflow-bg: var(--avatar-overflow-bg);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -77,27 +90,65 @@
     --input: oklch(0.922 0 0);
     --ring: oklch(0.708 0 0);
     --radius: 0.5rem;
+
+    /* TaskTree UI chrome — light */
+    --app-bg: #ffffff;
+    --surface: #ffffff;
+    --surface-overlay: #ffffff;
+    --node-hover: #f0f1f5;
+    --node-selected: #e8e8ff;
+    --badge-bg: #e6e9ef;
+    --border-subtle: #e6e9ef;
+    --border-input: #d8dbe6;
+    --icon-muted: #9ba0aa;
+    --avatar-border: #f6f7fb;
+    --avatar-overflow-bg: #e6e9ef;
   }
 
   .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
+    --background: #181b34;
+    --foreground: oklch(0.93 0.01 265);
+    --card: oklch(0.21 0.035 265);
+    --card-foreground: oklch(0.93 0.01 265);
+    --popover: oklch(0.21 0.035 265);
+    --popover-foreground: oklch(0.93 0.01 265);
+    --primary: oklch(0.9 0.01 265);
+    --primary-foreground: oklch(0.21 0.035 265);
+    --secondary: oklch(0.26 0.04 265);
+    --secondary-foreground: oklch(0.93 0.01 265);
+    --muted: oklch(0.26 0.04 265);
+    --muted-foreground: oklch(0.65 0.02 265);
+    --accent: oklch(0.26 0.04 265);
+    --accent-foreground: oklch(0.93 0.01 265);
     --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
+    --border: oklch(1 0 0 / 8%);
+    --input: oklch(1 0 0 / 12%);
+    --ring: oklch(0.5 0.03 265);
+
+    /* monday.com design tokens — dark overrides */
+    --color-monday-dark: #d5d8e8;
+    --color-monday-dark-secondary: #8b90a8;
+    --color-monday-border: #2e3252;
+    --color-monday-bg-light: #1f2240;
+    --color-monday-bg-hover: #252849;
+
+    /* shadcn table tokens — dark */
+    --table-foreground: oklch(0.6 0.02 265);
+    --table-secondary: oklch(0.4 0.02 265);
+    --table-header: oklch(0.2 0.03 265);
+
+    /* TaskTree UI chrome — dark */
+    --app-bg: #181b34;
+    --surface: #181b34;
+    --surface-overlay: #252849;
+    --node-hover: #252849;
+    --node-selected: #2a2d55;
+    --badge-bg: #2a2d55;
+    --border-subtle: #2e3252;
+    --border-input: #383c62;
+    --icon-muted: #6b6f8a;
+    --avatar-border: #1f2240;
+    --avatar-overflow-bg: #2a2d55;
   }
 
   * {
@@ -137,5 +188,5 @@
    -------------------------------------------------------------------------*/
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #c3c6d4; border-radius: 9999px; }
-::-webkit-scrollbar-thumb:hover { background: #676879; }
+::-webkit-scrollbar-thumb { background: var(--color-monday-border); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-monday-dark-secondary); }

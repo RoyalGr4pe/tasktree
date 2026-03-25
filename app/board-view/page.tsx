@@ -2,16 +2,18 @@
 
 import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Spinner } from '@/components/ui/spinner';
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import BoardSelector from '@/components/BoardSelector';
+import PlanEnforcementModal from '@/components/PlanEnforcementModal';
 import type { Board, Task, Workspace } from '@/types';
+import { PLAN_LIMITS } from '@/lib/plan-limits';
+import LoadingOne from '@/components/ui/loading';
 
 const Tree = dynamic(() => import('@/components/Tree/Tree'), {
   ssr: false,
   loading: () => (
-    <div className="flex justify-center py-10">
-      <Spinner />
+    <div className="min-h-screen flex items-center justify-center py-10">
+      <LoadingOne />
     </div>
   ),
 });
@@ -30,7 +32,30 @@ export default function BoardViewPage() {
   const [boards, setBoards] = useState<Board[]>([]);
   const [selectedBoard, setSelectedBoard] = useState<Board | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [taskCountByBoardId, setTaskCountByBoardId] = useState<Record<string, number>>({});
   const didInit = useRef(false);
+
+  // ---------------------------------------------------------------------------
+  // Enforcement — recomputed whenever boards or task counts change
+  // ---------------------------------------------------------------------------
+
+  function hasViolations(ws: Workspace, boardList: Board[], counts: Record<string, number>): boolean {
+    const limits = PLAN_LIMITS[ws.plan];
+    if (boardList.length > limits.maxBoards) return true;
+    for (const board of boardList) {
+      if ((counts[board.id] ?? 0) > limits.maxTasksPerBoard) return true;
+    }
+    return false;
+  }
+
+  const showEnforcement =
+    workspace !== null &&
+    hasViolations(workspace, boards, taskCountByBoardId) &&
+    (phase === 'boards' || phase === 'ready');
+
+  // ---------------------------------------------------------------------------
+  // Init
+  // ---------------------------------------------------------------------------
 
   useEffect(() => {
     if (didInit.current) return;
@@ -50,7 +75,6 @@ export default function BoardViewPage() {
     const { getMondayContext } = await import('@/lib/monday-context');
     const ctx = await getMondayContext();
 
-
     // 2. Bootstrap workspace (upserts on first visit)
     const wsRes = await fetch(`/api/workspaces?workspace_id=${encodeURIComponent(ctx.workspaceId)}`);
     if (!wsRes.ok) {
@@ -69,7 +93,14 @@ export default function BoardViewPage() {
     const { boards: loadedBoards }: { boards: Board[] } = await boardsRes.json();
     setBoards(loadedBoards);
 
-    // 4. Auto-select if only one board, otherwise show selector
+    // 4. Fetch task counts for all boards (for enforcement check)
+    const countsRes = await fetch(`/api/tasks/counts?workspace_id=${encodeURIComponent(ctx.workspaceId)}`);
+    if (countsRes.ok) {
+      const { counts } = await countsRes.json();
+      setTaskCountByBoardId(counts ?? {});
+    }
+
+    // 5. Auto-select if only one board, otherwise show selector
     if (loadedBoards.length === 1) {
       await loadBoard(loadedBoards[0]);
     } else {
@@ -88,6 +119,8 @@ export default function BoardViewPage() {
     }
     const { tasks: loadedTasks }: { tasks: Task[] } = await tasksRes.json();
     setTasks(loadedTasks);
+    // Keep task count in sync
+    setTaskCountByBoardId((prev) => ({ ...prev, [board.id]: loadedTasks.length }));
     setPhase('ready');
   }
 
@@ -110,6 +143,21 @@ export default function BoardViewPage() {
     setPhase('boards');
   }
 
+  function handleEnforcementBoardDeleted(boardId: string) {
+    setBoards((prev) => prev.filter((b) => b.id !== boardId));
+    setTaskCountByBoardId((prev) => {
+      const next = { ...prev };
+      delete next[boardId];
+      return next;
+    });
+    // If the deleted board was selected, go back to board list
+    if (selectedBoard?.id === boardId) {
+      setSelectedBoard(null);
+      setTasks([]);
+      setPhase('boards');
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -117,7 +165,7 @@ export default function BoardViewPage() {
   if (phase === 'init' || phase === 'loading') {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-3">
-        <Spinner />
+        <LoadingOne />
         <p className="text-xs text-monday-dark-secondary">
           {phase === 'init' ? 'Connecting…' : 'Loading tasks…'}
         </p>
@@ -128,7 +176,7 @@ export default function BoardViewPage() {
   if (phase === 'error') {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
-        <div className="p-5 rounded-lg bg-red-50 border border-red-200 text-red-800 max-w-sm w-full mx-4">
+        <div className="p-5 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive max-w-sm w-full mx-4">
           <p className="font-semibold text-sm mb-1">Something went wrong</p>
           <p className="text-sm">{errorMessage}</p>
           <button
@@ -141,7 +189,7 @@ export default function BoardViewPage() {
                 setPhase('error');
               });
             }}
-            className="mt-3 px-3 py-1.5 text-sm font-medium text-white bg-[#0073ea] rounded hover:bg-[#0060c0] transition-colors"
+            className="mt-3 px-3 py-1.5 text-sm font-medium text-white bg-monday-blue rounded hover:bg-monday-blue-hover transition-colors"
           >
             Retry
           </button>
@@ -150,33 +198,50 @@ export default function BoardViewPage() {
     );
   }
 
-  if (phase === 'boards' && workspace) {
-    return (
-      <BoardSelector
-        workspace={workspace}
-        boards={boards}
-        onSelectBoard={handleSelectBoard}
-        onBoardCreated={handleBoardCreated}
-      />
-    );
-  }
+  return (
+    <>
+      {/* Enforcement modal — rendered on top of whatever phase is active */}
+      {showEnforcement && workspace && (
+        <PlanEnforcementModal
+          workspace={workspace}
+          boards={boards}
+          taskCountByBoardId={taskCountByBoardId}
+          onBoardDeleted={handleEnforcementBoardDeleted}
+          onResolvedGoToBoard={(board) => {
+            // Navigate to the board so the user can delete tasks
+            handleSelectBoard(board);
+          }}
+        />
+      )}
 
-  if (phase === 'ready' && selectedBoard && workspace) {
-    return (
-      <main className="min-h-screen font-sans text-monday-dark">
-        <ErrorBoundary>
-          <div className="p-4">
-            <Tree
-              initialTasks={tasks}
-              board={selectedBoard}
-              workspace={workspace}
-              onBack={handleBackToBoards}
-            />
-          </div>
-        </ErrorBoundary>
-      </main>
-    );
-  }
+      {phase === 'boards' && workspace && (
+        <BoardSelector
+          workspace={workspace}
+          boards={boards}
+          onSelectBoard={handleSelectBoard}
+          onBoardCreated={handleBoardCreated}
+          onBoardRenamed={(updated) => setBoards((prev) => prev.map((b) => b.id === updated.id ? updated : b))}
+          onBoardDeleted={(id) => setBoards((prev) => prev.filter((b) => b.id !== id))}
+        />
+      )}
 
-  return null;
+      {phase === 'ready' && selectedBoard && workspace && (
+        <main className="min-h-screen font-sans text-monday-dark">
+          <ErrorBoundary>
+            <div className="p-4">
+              <Tree
+                initialTasks={tasks}
+                board={selectedBoard}
+                workspace={workspace}
+                onBack={handleBackToBoards}
+                onBoardRenamed={(updated) => setBoards((prev) => prev.map((b) => b.id === updated.id ? updated : b))}
+                onBoardDeleted={(id) => { setBoards((prev) => prev.filter((b) => b.id !== id)); handleBackToBoards(); }}
+                onTaskCountChanged={(boardId, count) => setTaskCountByBoardId((prev) => ({ ...prev, [boardId]: count }))}
+              />
+            </div>
+          </ErrorBoundary>
+        </main>
+      )}
+    </>
+  );
 }
