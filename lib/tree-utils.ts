@@ -1,4 +1,4 @@
-import type { Task, TreeTask as TreeNode } from '@/types';
+import type { Task, TaskRollup, TreeTask as TreeNode } from '@/types';
 
 // Alias for internal use throughout this file
 type Node = Task;
@@ -236,4 +236,78 @@ export function updateNodeName(tree: TreeNode[], nodeId: string, name: string): 
     }
     return node;
   });
+}
+
+// ---------------------------------------------------------------------------
+// computeRollups
+// For every task that has children, calculate rolled-up values from its
+// direct children only. Propagates bottom-up so grandparent rollups
+// include aggregated child estimates.
+//
+// Returns a Map of taskId → TaskRollup. Leaf tasks are not included.
+// ---------------------------------------------------------------------------
+
+export function computeRollups(tasks: Task[]): Map<string, TaskRollup> {
+  const result = new Map<string, TaskRollup>();
+
+  // Build a map of parentId → children for fast lookup
+  const childrenOf = new Map<string, Task[]>();
+  for (const task of tasks) {
+    if (task.parent_task_id) {
+      const arr = childrenOf.get(task.parent_task_id) ?? [];
+      arr.push(task);
+      childrenOf.set(task.parent_task_id, arr);
+    }
+  }
+
+  // Compute rollup for a single parent given its direct children
+  const rollupFor = (children: Task[]): TaskRollup => {
+    const child_count = children.length;
+    const done_count = children.filter((c) => c.status === 'done').length;
+
+    // Progress — weighted by estimate_hours if available, else unweighted
+    const totalEstimate = children.reduce((sum, c) => sum + (c.estimate_hours ?? 0), 0);
+    let progress_percent: number;
+    if (totalEstimate > 0) {
+      const completedEstimate = children
+        .filter((c) => c.status === 'done')
+        .reduce((sum, c) => sum + (c.estimate_hours ?? 0), 0);
+      progress_percent = Math.round((completedEstimate / totalEstimate) * 100);
+    } else {
+      progress_percent = child_count > 0 ? Math.round((done_count / child_count) * 100) : 0;
+    }
+
+    // Total effort — sum of all children
+    const total_estimated_hours = children.reduce((sum, c) => sum + (c.estimate_hours ?? 0), 0);
+
+    // Latest due date
+    const dueDates = children.map((c) => c.due_date).filter((d): d is string => d !== null);
+    const rolled_up_due_date = dueDates.length > 0
+      ? dueDates.reduce((latest, d) => (d > latest ? d : latest))
+      : null;
+
+    // Aggregated status
+    let aggregated_status: TaskRollup['aggregated_status'];
+    const statuses = new Set(children.map((c) => c.status));
+    if (statuses.has('done') && statuses.size === 1) {
+      aggregated_status = 'done';
+    } else if (children.every((c) => c.status === null || c.status === 'backlog' || c.status === 'todo')) {
+      aggregated_status = null; // not started
+    } else if (statuses.has('in_progress') || statuses.has('in_review')) {
+      aggregated_status = 'in_progress';
+    } else if (done_count > 0 && done_count < child_count) {
+      aggregated_status = 'mixed';
+    } else {
+      aggregated_status = null;
+    }
+
+    return { progress_percent, total_estimated_hours, rolled_up_due_date, aggregated_status, child_count, done_count };
+  };
+
+  // Only compute for tasks that have children
+  for (const [parentId, children] of childrenOf) {
+    result.set(parentId, rollupFor(children));
+  }
+
+  return result;
 }

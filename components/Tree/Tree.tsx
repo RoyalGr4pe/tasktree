@@ -15,12 +15,12 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import type { TreeTask, Task, PatchTaskPayload, Board, Workspace, PlanLimitError, MondayUser, TaskAssignee } from '@/types';
+import type { TreeTask, Task, TaskRollup, PatchTaskPayload, Board, Workspace, PlanLimitError, MondayUser, TaskAssignee } from '@/types';
 import type { Label } from '@/components/LabelPicker';
 import type { Priority } from '@/components/PriorityPicker';
 import type { Status } from '@/components/StatusPicker';
 import { StatusDot } from '@/components/StatusPicker';
-import { buildTree, flattenTree, reorderNodes } from '@/lib/tree-utils';
+import { buildTree, flattenTree, reorderNodes, computeRollups } from '@/lib/tree-utils';
 import TreeNode from './TreeNode';
 import DragLayer from './DragLayer';
 import FilterBar, { EMPTY_FILTERS, type ActiveFilters } from './FilterBar';
@@ -189,6 +189,15 @@ setLabels(body.labels ?? []);
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ due_date }),
     }).catch((err) => console.error('[Tree] Failed to persist due date:', err));
+  }, []);
+
+  const handleEstimateChange = useCallback(async (taskId: string, estimate_hours: number | null) => {
+    setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, estimate_hours } : t));
+    await fetch(`/api/tasks/${taskId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estimate_hours }),
+    }).catch((err) => console.error('[Tree] Failed to persist estimate:', err));
   }, []);
 
   const handleBulkStatusChange = useCallback(async (status: Status | null) => {
@@ -363,6 +372,9 @@ setLabels(body.labels ?? []);
     }
     return result;
   }, [groupedTrees]);
+
+  // Rollups — recomputed whenever tasks change
+  const rollupMap = useMemo<Map<string, TaskRollup>>(() => computeRollups(tasks), [tasks]);
 
   // All flat IDs across all groups (needed for DnD context)
   const allSortableIds = useMemo(() => {
@@ -692,6 +704,8 @@ setLabels(body.labels ?? []);
     onBulkPriorityChange: handleBulkPriorityChange,
     onBulkLabelsChange: handleBulkLabelsChange,
     onBulkAssigneesChange: handleBulkAssigneesChange,
+    rollupMap,
+    onEstimateChange: handleEstimateChange,
   };
 
   // ---------------------------------------------------------------------------

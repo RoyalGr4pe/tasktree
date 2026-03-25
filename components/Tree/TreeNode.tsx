@@ -14,7 +14,7 @@ import {
     ContextMenuSubTrigger,
     ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import type { TreeTask, MondayUser, Plan } from '@/types';
+import type { TreeTask, MondayUser, Plan, TaskRollup } from '@/types';
 import { TREE_CONFIG } from '@/config/tree';
 import AssigneeAvatars from '@/components/AssigneeAvatars';
 import AssigneePicker, { AssigneePickerContent } from '@/components/AssigneePicker';
@@ -23,6 +23,7 @@ import StatusPicker, { StatusPickerContent, type Status, STATUSES, StatusDot } f
 import { DueDatePicker, formatDueDate, isDueDateOverdue } from '@/components/DueDatePicker';
 import { HiCalendar } from "react-icons/hi2";
 import LabelPicker, { LabelPickerContent, LabelChip, type Label } from '@/components/LabelPicker';
+import RollupBadges from '@/components/RollupBadges';
 
 
 interface TreeNodeProps {
@@ -72,6 +73,9 @@ interface TreeNodeProps {
     onBulkPriorityChange: (priority: Priority) => void;
     onBulkLabelsChange: (labelIds: string[]) => void;
     onBulkAssigneesChange: (userIds: string[]) => void;
+    // Rollups
+    rollupMap: Map<string, TaskRollup>;
+    onEstimateChange: (taskId: string, hours: number | null) => void;
 }
 
 // ── Context menu helpers ────────────────────────────────────────────────────
@@ -139,12 +143,30 @@ export default function TreeNode({
     onBulkPriorityChange,
     onBulkLabelsChange,
     onBulkAssigneesChange,
+    rollupMap,
+    onEstimateChange,
 }: TreeNodeProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState(node.title ?? '');
     const [isSaving, setIsSaving] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const justFocusedRef = useRef(false);
+
+    const [isEditingEstimate, setIsEditingEstimate] = useState(false);
+    const [estimateValue, setEstimateValue] = useState(String(node.estimate_hours ?? ''));
+    const estimateInputRef = useRef<HTMLInputElement>(null);
+
+    const commitEstimate = useCallback(() => {
+        setIsEditingEstimate(false);
+        const raw = estimateValue.trim();
+        const parsed = raw === '' ? null : parseFloat(raw);
+        const current = node.estimate_hours ?? null;
+        if (parsed === current || (parsed !== null && isNaN(parsed))) {
+            setEstimateValue(String(node.estimate_hours ?? ''));
+            return;
+        }
+        onEstimateChange(node.id, parsed);
+    }, [estimateValue, node.estimate_hours, node.id, onEstimateChange]);
 
     useEffect(() => {
         if (editingNodeId === node.id) {
@@ -325,12 +347,21 @@ export default function TreeNode({
                             )}
                         </div>
 
+
                         {/* Collapsed child count badge */}
                         {hasChildren && !isExpanded && (
                             <span className={`shrink-0 ${TREE_CONFIG.badgeFontSize} font-medium bg-badge-bg rounded-full px-1.5 py-0.5 leading-none`}>
                                 {node.children.length}
                             </span>
                         )}
+
+                        {/* Rollup circle — far right, only on parent tasks */}
+                        {hasChildren && rollupMap.has(node.id) && (
+                            <div className="shrink-0 mr-2">
+                                <RollupBadges rollup={rollupMap.get(node.id)!} />
+                            </div>
+                        )}
+
 
                         {/* Labels */}
                         {(labelMap[node.id] ?? []).length > 0 && (
@@ -380,6 +411,39 @@ export default function TreeNode({
                             />
                         </div>
 
+
+                        {/* Estimate hours */}
+                        <div className="shrink-0 mx-2">
+                            {isEditingEstimate ? (
+                                <input
+                                    ref={estimateInputRef}
+                                    type="number"
+                                    min="0"
+                                    step="0.5"
+                                    value={estimateValue}
+                                    onChange={(e) => setEstimateValue(e.target.value)}
+                                    onBlur={commitEstimate}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') { e.preventDefault(); commitEstimate(); }
+                                        if (e.key === 'Escape') { setIsEditingEstimate(false); setEstimateValue(String(node.estimate_hours ?? '')); }
+                                    }}
+                                    className="w-16 h-7 px-2 text-sm font-medium text-monday-dark bg-transparent border border-monday-blue rounded-full outline-none text-center"
+                                    autoFocus
+                                />
+                            ) : (
+                                <button
+                                    onClick={() => { setEstimateValue(String(node.estimate_hours ?? '')); setIsEditingEstimate(true); }}
+                                    className={`flex items-center gap-1 h-7 hover:bg-node-hover px-2 rounded-full border-[0.5px] border-table-secondary transition-colors text-sm font-medium text-table-foreground ${!node.estimate_hours ? 'opacity-70' : ''}`}
+                                    title="Set estimate"
+                                >
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <circle cx="12" cy="12" r="10" />
+                                        <polyline points="12 6 12 12 16 14" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                    <span>{node.estimate_hours ? `${node.estimate_hours}h` : 'Est'}</span>
+                                </button>
+                            )}
+                        </div>
 
                         {/* Assignee avatars */}
                         <div className="shrink-0 mx-2">
@@ -576,6 +640,8 @@ export default function TreeNode({
                             onBulkPriorityChange={onBulkPriorityChange}
                             onBulkLabelsChange={onBulkLabelsChange}
                             onBulkAssigneesChange={onBulkAssigneesChange}
+                            rollupMap={rollupMap}
+                            onEstimateChange={onEstimateChange}
                         />
                     ))}
                 </div>

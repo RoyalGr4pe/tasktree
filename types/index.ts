@@ -39,12 +39,26 @@ export interface Task {
   priority: Priority | null;
   status: Status | null;
   due_date: string | null;
+  estimate_hours?: number | null;
   created_at: string;
   linked_monday_item_id: string | null;
 
   // Aliases kept for tree-utils.ts compatibility (mapped at API boundary)
   parent_node_id: string | null;  // === parent_task_id
   name: string;                   // === title
+}
+
+// ---------------------------------------------------------------------------
+// Rollups — computed client-side from direct children
+// ---------------------------------------------------------------------------
+
+export interface TaskRollup {
+  progress_percent: number;       // 0–100
+  total_estimated_hours: number;  // sum of child estimate_hours
+  rolled_up_due_date: string | null;   // max(child.due_date)
+  aggregated_status: Status | 'mixed' | null;
+  child_count: number;
+  done_count: number;
 }
 
 export interface TreeTask extends Task {

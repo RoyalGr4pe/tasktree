@@ -23,6 +23,7 @@ export async function PATCH(
     priority: string | null;
     status: string | null;
     due_date: string | null;
+    estimate_hours: number | null;
   }>;
 
   try {
@@ -39,6 +40,7 @@ export async function PATCH(
   if (body.priority !== undefined)      updates.priority       = body.priority;
   if (body.status !== undefined)        updates.status         = body.status;
   if (body.due_date !== undefined)      updates.due_date       = body.due_date;
+  if (body.estimate_hours !== undefined) updates.estimate_hours = body.estimate_hours;
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
