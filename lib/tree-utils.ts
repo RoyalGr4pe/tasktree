@@ -1,4 +1,4 @@
-import type { Task, TaskRollup, TreeTask as TreeNode } from '@/types';
+import type { Task, TaskRollup, DependencyMap, TreeTask as TreeNode } from '@/types';
 
 // Alias for internal use throughout this file
 type Node = Task;
@@ -310,4 +310,51 @@ export function computeRollups(tasks: Task[]): Map<string, TaskRollup> {
   }
 
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// isTaskBlocked
+// Returns true if any of the task's dependencies (from dependencyMap) have a
+// status other than 'done'. Leaf tasks with no deps are never blocked.
+// ---------------------------------------------------------------------------
+
+export function isTaskBlocked(taskId: string, tasks: Task[], dependencyMap: DependencyMap): boolean {
+  const depIds = dependencyMap[taskId];
+  if (!depIds || depIds.length === 0) return false;
+
+  const taskById = new Map(tasks.map((t) => [t.id, t]));
+  return depIds.some((depId) => {
+    const dep = taskById.get(depId);
+    return dep && dep.status !== 'done';
+  });
+}
+
+// ---------------------------------------------------------------------------
+// clientDetectCycle
+// Checks client-side (before hitting the API) whether adding
+// newTaskId → dependsOnId would create a cycle in the current dependencyMap.
+// Returns true if a cycle would be created.
+// ---------------------------------------------------------------------------
+
+export function clientDetectCycle(
+  newTaskId: string,
+  dependsOnId: string,
+  dependencyMap: DependencyMap
+): boolean {
+  if (newTaskId === dependsOnId) return true;
+
+  // BFS from dependsOnId following its own deps — if we reach newTaskId, it's a cycle
+  const visited = new Set<string>();
+  const queue = [dependsOnId];
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (current === newTaskId) return true;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    const next = dependencyMap[current];
+    if (next) queue.push(...next);
+  }
+
+  return false;
 }

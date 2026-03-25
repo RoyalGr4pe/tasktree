@@ -49,6 +49,20 @@ export interface Task {
 }
 
 // ---------------------------------------------------------------------------
+// Dependencies
+// ---------------------------------------------------------------------------
+
+export interface TaskDependency {
+  id: string;
+  task_id: string;           // the dependent task (this task is blocked until depends_on is done)
+  depends_on_task_id: string; // the blocking task
+  created_at: string;
+}
+
+// Map of taskId → IDs it depends on (blocking tasks)
+export type DependencyMap = Record<string, string[]>;
+
+// ---------------------------------------------------------------------------
 // Rollups — computed client-side from direct children
 // ---------------------------------------------------------------------------
 

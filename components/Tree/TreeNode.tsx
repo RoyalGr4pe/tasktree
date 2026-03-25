@@ -14,7 +14,7 @@ import {
     ContextMenuSubTrigger,
     ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import type { TreeTask, MondayUser, Plan, TaskRollup } from '@/types';
+import type { TreeTask, MondayUser, Plan, TaskRollup, DependencyMap } from '@/types';
 import { TREE_CONFIG } from '@/config/tree';
 import AssigneeAvatars from '@/components/AssigneeAvatars';
 import AssigneePicker, { AssigneePickerContent } from '@/components/AssigneePicker';
@@ -24,6 +24,7 @@ import { DueDatePicker, formatDueDate, isDueDateOverdue } from '@/components/Due
 import { HiCalendar } from "react-icons/hi2";
 import LabelPicker, { LabelPickerContent, LabelChip, type Label } from '@/components/LabelPicker';
 import RollupBadges from '@/components/RollupBadges';
+import { DependencyPickerContent } from '@/components/DependencyPicker';
 
 
 interface TreeNodeProps {
@@ -76,6 +77,12 @@ interface TreeNodeProps {
     // Rollups
     rollupMap: Map<string, TaskRollup>;
     onEstimateChange: (taskId: string, hours: number | null) => void;
+    // Dependencies
+    dependencyMap: DependencyMap;
+    blockedIds: Set<string>;
+    allTasksFlat: { id: string; title: string }[];
+    onAddDependency: (taskId: string, dependsOnId: string) => void;
+    onRemoveDependency: (taskId: string, dependsOnId: string) => void;
 }
 
 // ── Context menu helpers ────────────────────────────────────────────────────
@@ -145,6 +152,11 @@ export default function TreeNode({
     onBulkAssigneesChange,
     rollupMap,
     onEstimateChange,
+    dependencyMap,
+    blockedIds,
+    allTasksFlat,
+    onAddDependency,
+    onRemoveDependency,
 }: TreeNodeProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState(node.title ?? '');
@@ -240,6 +252,7 @@ export default function TreeNode({
     const isMultiSelected = selectedIds.size > 1 && selectedIds.has(node.id);
     const isTemp = node.id.startsWith('__temp__');
     const hasChildren = node.children.length > 0;
+    const isBlocked = blockedIds.has(node.id);
     const isExpanded = node.isExpanded !== false;
     const isDropTarget = activeDropTargetId === node.id;
     const dueDateLabel = formatDueDate(node.due_date ?? null);
@@ -322,6 +335,18 @@ export default function TreeNode({
                                 />
                             )}
                         </div>
+
+                        {/* Blocked indicator */}
+                        {isBlocked && (
+                            <div
+                                className="shrink-0 ml-1 flex items-center justify-center w-5 h-5 rounded text-monday-error"
+                                title={`Blocked — waiting on ${(dependencyMap[node.id] ?? []).length} unfinished task(s)`}
+                            >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M18 11V8A6 6 0 006 8v3H4v11h16V11h-2zm-8-3a4 4 0 018 0v3H10V8zm2 8.7V18h-2v-1.3a2 2 0 112 0z" />
+                                </svg>
+                            </div>
+                        )}
 
                         {/* Name */}
                         <div className="flex-1 min-w-0 mx-2 flex items-center">
@@ -571,6 +596,29 @@ export default function TreeNode({
                         </ContextMenuSubContent>
                     </ContextMenuSub>
 
+                    {/* Dependencies */}
+                    {!isMultiSelected && !isTemp && (
+                        <ContextMenuSub>
+                            <ContextMenuSubTrigger className={`${TREE_CONFIG.fontSize} gap-2 rounded-lg px-2 py-1.5`}>
+                                <DependencyIcon />
+                                <span className="flex-1">Dependencies</span>
+                                {(dependencyMap[node.id] ?? []).length > 0 && (
+                                    <span className="text-xs text-icon-muted">{(dependencyMap[node.id] ?? []).length}</span>
+                                )}
+                            </ContextMenuSubTrigger>
+                            <ContextMenuSubContent className="w-64 rounded-xl border border-border-subtle shadow-lg p-0 overflow-hidden">
+                                <DependencyPickerContent
+                                    taskId={node.id}
+                                    allTasksFlat={allTasksFlat}
+                                    dependencyMap={dependencyMap}
+                                    onAddDependency={onAddDependency}
+                                    onRemoveDependency={onRemoveDependency}
+                                    onClose={() => {}}
+                                />
+                            </ContextMenuSubContent>
+                        </ContextMenuSub>
+                    )}
+
                     <ContextMenuSeparator />
 
                     {!isMultiSelected && (
@@ -642,6 +690,11 @@ export default function TreeNode({
                             onBulkAssigneesChange={onBulkAssigneesChange}
                             rollupMap={rollupMap}
                             onEstimateChange={onEstimateChange}
+                            dependencyMap={dependencyMap}
+                            blockedIds={blockedIds}
+                            allTasksFlat={allTasksFlat}
+                            onAddDependency={onAddDependency}
+                            onRemoveDependency={onRemoveDependency}
                         />
                     ))}
                 </div>
@@ -675,6 +728,17 @@ function SubitemIcon() {
         <svg className={`${TREE_CONFIG.iconSize} shrink-0`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 18h6M12 15V3M5 3h14" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 10l4 4-4 4" />
+        </svg>
+    );
+}
+
+function DependencyIcon() {
+    return (
+        <svg className={`${TREE_CONFIG.iconSize} shrink-0`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="5" cy="12" r="2" fill="currentColor" stroke="none" />
+            <circle cx="19" cy="5" r="2" fill="currentColor" stroke="none" />
+            <circle cx="19" cy="19" r="2" fill="currentColor" stroke="none" />
+            <path strokeLinecap="round" strokeWidth={1.5} d="M7 11.5l10-5M7 12.5l10 5" />
         </svg>
     );
 }

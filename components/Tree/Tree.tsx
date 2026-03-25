@@ -15,15 +15,16 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import type { TreeTask, Task, TaskRollup, PatchTaskPayload, Board, Workspace, PlanLimitError, MondayUser, TaskAssignee } from '@/types';
+import type { TreeTask, Task, TaskRollup, TaskDependency, DependencyMap, PatchTaskPayload, Board, Workspace, PlanLimitError, MondayUser, TaskAssignee } from '@/types';
 import type { Label } from '@/components/LabelPicker';
 import type { Priority } from '@/components/PriorityPicker';
 import type { Status } from '@/components/StatusPicker';
 import { StatusDot } from '@/components/StatusPicker';
-import { buildTree, flattenTree, reorderNodes, computeRollups } from '@/lib/tree-utils';
+import { buildTree, flattenTree, reorderNodes, computeRollups, isTaskBlocked, clientDetectCycle } from '@/lib/tree-utils';
 import TreeNode from './TreeNode';
 import DragLayer from './DragLayer';
 import FilterBar, { EMPTY_FILTERS, type ActiveFilters } from './FilterBar';
+import DependencyGraph from '@/components/DependencyGraph';
 import PlanLimitBanner from '@/components/PlanLimitBanner';
 import {
   AlertDialog,
@@ -99,6 +100,11 @@ export default function Tree({ initialTasks, board, workspace, onBack, onBoardRe
   // Which task's label picker is open
   const [labelPickerTaskId, setLabelPickerTaskId] = useState<string | null>(null);
 
+  // Dependencies: map of taskId → taskIds it depends on
+  const [dependencyMap, setDependencyMap] = useState<DependencyMap>({});
+  // View mode: tree list or dependency graph
+  const [viewMode, setViewMode] = useState<'tree' | 'graph'>('tree');
+
   // Fetch monday users + all assignees + labels on mount
   useEffect(() => {
     fetch('/api/users')
@@ -137,6 +143,18 @@ setLabels(body.labels ?? []);
         setLabelMap(map);
       })
       .catch((err) => console.error('[Tree] Failed to fetch task labels:', err));
+
+    fetch(`/api/tasks/dependencies?board_id=${board.id}`)
+      .then((r) => r.json())
+      .then(({ dependencies }: { dependencies: TaskDependency[] }) => {
+        const map: DependencyMap = {};
+        for (const d of dependencies ?? []) {
+          if (!map[d.task_id]) map[d.task_id] = [];
+          map[d.task_id].push(d.depends_on_task_id);
+        }
+        setDependencyMap(map);
+      })
+      .catch((err) => console.error('[Tree] Failed to fetch dependencies:', err));
   }, [board.id, workspace.id]);
 
   const handleLabelsChange = useCallback(async (taskId: string, labelIds: string[]) => {
@@ -189,6 +207,37 @@ setLabels(body.labels ?? []);
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ due_date }),
     }).catch((err) => console.error('[Tree] Failed to persist due date:', err));
+  }, []);
+
+  const handleAddDependency = useCallback(async (taskId: string, dependsOnId: string) => {
+    if (clientDetectCycle(taskId, dependsOnId, dependencyMap)) return;
+    setDependencyMap((prev) => ({
+      ...prev,
+      [taskId]: [...(prev[taskId] ?? []), dependsOnId],
+    }));
+    const res = await fetch(`/api/tasks/${taskId}/dependencies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ depends_on_task_id: dependsOnId }),
+    });
+    if (!res.ok) {
+      // Revert
+      setDependencyMap((prev) => ({
+        ...prev,
+        [taskId]: (prev[taskId] ?? []).filter((id) => id !== dependsOnId),
+      }));
+      console.error('[Tree] Failed to add dependency');
+    }
+  }, [dependencyMap]);
+
+  const handleRemoveDependency = useCallback(async (taskId: string, dependsOnId: string) => {
+    setDependencyMap((prev) => ({
+      ...prev,
+      [taskId]: (prev[taskId] ?? []).filter((id) => id !== dependsOnId),
+    }));
+    await fetch(`/api/tasks/${taskId}/dependencies?depends_on_task_id=${dependsOnId}`, {
+      method: 'DELETE',
+    }).catch((err) => console.error('[Tree] Failed to remove dependency:', err));
   }, []);
 
   const handleEstimateChange = useCallback(async (taskId: string, estimate_hours: number | null) => {
@@ -375,6 +424,15 @@ setLabels(body.labels ?? []);
 
   // Rollups — recomputed whenever tasks change
   const rollupMap = useMemo<Map<string, TaskRollup>>(() => computeRollups(tasks), [tasks]);
+
+  // Blocked task IDs — tasks with at least one unfinished dependency
+  const blockedIds = useMemo<Set<string>>(() => {
+    const result = new Set<string>();
+    for (const taskId of Object.keys(dependencyMap)) {
+      if (isTaskBlocked(taskId, tasks, dependencyMap)) result.add(taskId);
+    }
+    return result;
+  }, [tasks, dependencyMap]);
 
   // All flat IDs across all groups (needed for DnD context)
   const allSortableIds = useMemo(() => {
@@ -706,6 +764,11 @@ setLabels(body.labels ?? []);
     onBulkAssigneesChange: handleBulkAssigneesChange,
     rollupMap,
     onEstimateChange: handleEstimateChange,
+    dependencyMap,
+    blockedIds,
+    allTasksFlat: tasks.map((t) => ({ id: t.id, title: t.title })),
+    onAddDependency: handleAddDependency,
+    onRemoveDependency: handleRemoveDependency,
   };
 
   // ---------------------------------------------------------------------------
@@ -769,6 +832,32 @@ setLabels(body.labels ?? []);
               mondayUsers={mondayUsers}
               labels={labels}
             />
+
+            {/* View toggle: tree / graph */}
+            <div className="flex items-center rounded-lg bg-badge-bg p-0.5 gap-0.5 shrink-0">
+              <button
+                onClick={() => setViewMode('tree')}
+                title="Tree view"
+                className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${viewMode === 'tree' ? 'bg-surface text-monday-dark shadow-sm' : 'text-icon-muted hover:text-monday-dark'}`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setViewMode('graph')}
+                title="Dependency graph"
+                className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${viewMode === 'graph' ? 'bg-surface text-monday-dark shadow-sm' : 'text-icon-muted hover:text-monday-dark'}`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="5" cy="12" r="2" fill="currentColor" stroke="none" />
+                  <circle cx="19" cy="5" r="2" fill="currentColor" stroke="none" />
+                  <circle cx="19" cy="19" r="2" fill="currentColor" stroke="none" />
+                  <path strokeLinecap="round" strokeWidth={1.5} d="M7 11.5l10-5M7 12.5l10 5" />
+                </svg>
+              </button>
+            </div>
+
             <button
               onClick={() => handleAddRoot(null)}
               className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-table-secondary hover:text-foreground hover:bg-badge-bg transition-colors"
@@ -789,9 +878,19 @@ setLabels(body.labels ?? []);
             />
           )}
 
+          {/* Graph view */}
+          {viewMode === 'graph' && (
+            <DependencyGraph
+              tasks={tasks}
+              dependencyMap={dependencyMap}
+              onAddDependency={handleAddDependency}
+              onRemoveDependency={handleRemoveDependency}
+            />
+          )}
+
           {/* Status groups */}
           {/* Empty states */}
-          {tasks.length === 0 && (
+          {viewMode === 'tree' && tasks.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
               <svg className="w-12 h-12 text-border-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -809,7 +908,7 @@ setLabels(body.labels ?? []);
             </div>
           )}
 
-          {tasks.length > 0 && filteredTasks.length === 0 && (
+          {viewMode === 'tree' && tasks.length > 0 && filteredTasks.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
               <svg className="w-12 h-12 text-border-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -827,7 +926,7 @@ setLabels(body.labels ?? []);
             </div>
           )}
 
-          {STATUS_GROUPS.map(({ status, label, color }) => {
+          {viewMode === 'tree' && STATUS_GROUPS.map(({ status, label, color }) => {
             const groupKey = status ?? '__null__';
             const rootNodes = groupedTrees.get(status) ?? [];
             const isGroupCollapsed = collapsedIds.has(`__group__${groupKey}`);
