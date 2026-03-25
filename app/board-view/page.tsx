@@ -5,7 +5,8 @@ import dynamic from 'next/dynamic';
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import BoardSelector from '@/components/BoardSelector';
 import PlanEnforcementModal from '@/components/PlanEnforcementModal';
-import type { Board, Task, Workspace } from '@/types';
+import ProgramView from '@/components/ProgramView';
+import type { Board, Task, Workspace, Program } from '@/types';
 import { PLAN_LIMITS } from '@/lib/plan-limits';
 import LoadingOne from '@/components/ui/loading';
 
@@ -23,6 +24,7 @@ type AppPhase =
   | 'boards'     // showing board selector / empty state
   | 'loading'    // fetching tasks for selected board
   | 'ready'      // tree ready
+  | 'program'    // viewing a program (cross-board)
   | 'error';
 
 export default function BoardViewPage() {
@@ -33,25 +35,28 @@ export default function BoardViewPage() {
   const [selectedBoard, setSelectedBoard] = useState<Board | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [taskCountByBoardId, setTaskCountByBoardId] = useState<Record<string, number>>({});
+  const [programs, setPrograms] = useState<Program[]>([]);
+  const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
   const didInit = useRef(false);
 
   // ---------------------------------------------------------------------------
   // Enforcement — recomputed whenever boards or task counts change
   // ---------------------------------------------------------------------------
 
-  function hasViolations(ws: Workspace, boardList: Board[], counts: Record<string, number>): boolean {
+  function hasViolations(ws: Workspace, boardList: Board[], counts: Record<string, number>, programList: typeof programs): boolean {
     const limits = PLAN_LIMITS[ws.plan];
     if (boardList.length > limits.maxBoards) return true;
     for (const board of boardList) {
       if ((counts[board.id] ?? 0) > limits.maxTasksPerBoard) return true;
     }
+    if (limits.maxPrograms !== Infinity && programList.length > limits.maxPrograms) return true;
     return false;
   }
 
   const showEnforcement =
     workspace !== null &&
-    hasViolations(workspace, boards, taskCountByBoardId) &&
-    (phase === 'boards' || phase === 'ready');
+    hasViolations(workspace, boards, taskCountByBoardId, programs) &&
+    (phase === 'boards' || phase === 'ready' || phase === 'program');
 
   // ---------------------------------------------------------------------------
   // Init
@@ -100,6 +105,13 @@ export default function BoardViewPage() {
       setTaskCountByBoardId(counts ?? {});
     }
 
+    // 4b. Load programs
+    const programsRes = await fetch(`/api/programs?workspace_id=${encodeURIComponent(ctx.workspaceId)}`);
+    if (programsRes.ok) {
+      const { programs: loadedPrograms } = await programsRes.json();
+      setPrograms(loadedPrograms ?? []);
+    }
+
     // 5. Auto-select if only one board, otherwise show selector
     if (loadedBoards.length === 1) {
       await loadBoard(loadedBoards[0]);
@@ -139,8 +151,28 @@ export default function BoardViewPage() {
 
   function handleBackToBoards() {
     setSelectedBoard(null);
+    setSelectedProgram(null);
     setTasks([]);
     setPhase('boards');
+  }
+
+  function handleSelectProgram(program: Program) {
+    setSelectedProgram(program);
+    setPhase('program');
+  }
+
+  async function handleProgramCreated(name: string) {
+    if (!workspace) return;
+    const res = await fetch('/api/programs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspace_id: workspace.id, name }),
+    });
+    if (res.ok) {
+      const { program } = await res.json();
+      setPrograms((prev) => [...prev, program]);
+      handleSelectProgram(program);
+    }
   }
 
   function handleEnforcementBoardDeleted(boardId: string) {
@@ -205,10 +237,11 @@ export default function BoardViewPage() {
         <PlanEnforcementModal
           workspace={workspace}
           boards={boards}
+          programs={programs}
           taskCountByBoardId={taskCountByBoardId}
           onBoardDeleted={handleEnforcementBoardDeleted}
+          onProgramDeleted={(id) => setPrograms((prev) => prev.filter((p) => p.id !== id))}
           onResolvedGoToBoard={(board) => {
-            // Navigate to the board so the user can delete tasks
             handleSelectBoard(board);
           }}
         />
@@ -218,11 +251,36 @@ export default function BoardViewPage() {
         <BoardSelector
           workspace={workspace}
           boards={boards}
+          programs={programs}
           onSelectBoard={handleSelectBoard}
           onBoardCreated={handleBoardCreated}
           onBoardRenamed={(updated) => setBoards((prev) => prev.map((b) => b.id === updated.id ? updated : b))}
           onBoardDeleted={(id) => setBoards((prev) => prev.filter((b) => b.id !== id))}
+          onSelectProgram={handleSelectProgram}
+          onProgramCreated={handleProgramCreated}
+          onProgramDeleted={(id) => setPrograms((prev) => prev.filter((p) => p.id !== id))}
         />
+      )}
+
+      {phase === 'program' && selectedProgram && workspace && (
+        <main className="min-h-screen font-sans text-monday-dark">
+          <div className="p-4">
+            <ProgramView
+              program={selectedProgram}
+              boards={boards}
+              workspace={workspace}
+              onBack={handleBackToBoards}
+              onProgramRenamed={(updated) => {
+                setPrograms((prev) => prev.map((p) => p.id === updated.id ? updated : p));
+                setSelectedProgram(updated);
+              }}
+              onProgramDeleted={(id) => {
+                setPrograms((prev) => prev.filter((p) => p.id !== id));
+                handleBackToBoards();
+              }}
+            />
+          </div>
+        </main>
       )}
 
       {phase === 'ready' && selectedBoard && workspace && (

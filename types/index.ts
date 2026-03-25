@@ -14,6 +14,19 @@ export interface Workspace {
 // Board
 // ---------------------------------------------------------------------------
 
+export interface ProgramBoard {
+  board_id: string;
+  position: number;
+}
+
+export interface Program {
+  id: string;
+  workspace_id: string;
+  name: string;
+  created_at: string;
+  program_boards: ProgramBoard[];
+}
+
 export interface Board {
   id: string;
   workspace_id: string;

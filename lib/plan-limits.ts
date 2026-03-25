@@ -1,26 +1,32 @@
 import type { Plan } from '@/types';
 
+export const UPGRADE_URL = 'https://tasktree.salkaro.com/#pricing';
+
 export interface PlanLimits {
   maxBoards: number;
   maxTasksPerBoard: number;
-  maxDepth: number;  // Infinity = unlimited
+  maxDepth: number;       // Infinity = unlimited
+  maxPrograms: number;    // 0 = feature not available
 }
 
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   free: {
-    maxBoards: 1,
+    maxBoards: 2,
     maxTasksPerBoard: 100,
     maxDepth: 3,
+    maxPrograms: 1,
   },
   pro: {
     maxBoards: 10,
     maxTasksPerBoard: 2000,
     maxDepth: Infinity,
+    maxPrograms: 2,
   },
   business: {
     maxBoards: Infinity,
     maxTasksPerBoard: Infinity,
     maxDepth: Infinity,
+    maxPrograms: Infinity,
   },
 };
 
