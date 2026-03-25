@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
     workspace_id: string;
     parent_task_id?: string | null;
     title?: string;
+    status?: string | null;
   };
 
   try {
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { board_id, workspace_id, parent_task_id, title } = body;
+  const { board_id, workspace_id, parent_task_id, title, status } = body;
 
   if (!board_id || !workspace_id) {
     return NextResponse.json({ error: 'board_id and workspace_id are required' }, { status: 400 });
@@ -139,6 +140,7 @@ export async function POST(request: NextRequest) {
       title: title?.trim() ?? '',
       position,
       depth,
+      status: status ?? null,
     })
     .select()
     .single();

@@ -68,6 +68,10 @@ interface TreeNodeProps {
     onLabelPickerClose: () => void;
     onLabelsChange: (taskId: string, labelIds: string[]) => void;
     onCreateLabel: (name: string, color: string) => Promise<Label>;
+    onBulkStatusChange: (status: Status | null) => void;
+    onBulkPriorityChange: (priority: Priority) => void;
+    onBulkLabelsChange: (labelIds: string[]) => void;
+    onBulkAssigneesChange: (userIds: string[]) => void;
 }
 
 // ── Context menu helpers ────────────────────────────────────────────────────
@@ -131,6 +135,10 @@ export default function TreeNode({
     onLabelPickerClose,
     onLabelsChange,
     onCreateLabel,
+    onBulkStatusChange,
+    onBulkPriorityChange,
+    onBulkLabelsChange,
+    onBulkAssigneesChange,
 }: TreeNodeProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState(node.title ?? '');
@@ -207,6 +215,8 @@ export default function TreeNode({
     const priorityButtonRef = useRef<HTMLButtonElement>(null);
     const statusButtonRef = useRef<HTMLButtonElement>(null);
     const dueDateButtonRef = useRef<HTMLButtonElement>(null);
+    const isMultiSelected = selectedIds.size > 1 && selectedIds.has(node.id);
+    const isTemp = node.id.startsWith('__temp__');
     const hasChildren = node.children.length > 0;
     const isExpanded = node.isExpanded !== false;
     const isDropTarget = activeDropTargetId === node.id;
@@ -220,7 +230,7 @@ export default function TreeNode({
                 <ContextMenuTrigger asChild>
                     <div
                         className={[
-                            `group relative flex items-center ${TREE_CONFIG.rowHeight} text-table-foreground rounded-lg bg-surface transition-colors duration-75 cursor-default select-none`,
+                            `group relative flex items-center ${TREE_CONFIG.rowHeight} text-table-foreground rounded-lg transition-colors duration-75 cursor-default select-none`,
                             isDropTarget ? 'bg-blue-50' : selectedIds.has(node.id) ? 'bg-node-selected' : 'hover:bg-node-hover',
                         ].join(' ')}
                     >
@@ -377,9 +387,9 @@ export default function TreeNode({
                                 assignedUserIds={assigneeMap[node.id] ?? []}
                                 users={mondayUsers}
                                 buttonRef={avatarButtonRef}
-                                onClick={() => pickerOpenForId === node.id ? onPickerClose() : onPickerOpen(node.id)}
+                                onClick={() => !isTemp && (pickerOpenForId === node.id ? onPickerClose() : onPickerOpen(node.id))}
                             />
-                            {pickerOpenForId === node.id && (
+                            {!isTemp && pickerOpenForId === node.id && (
                                 <AssigneePicker
                                     taskId={node.id}
                                     workspaceId={workspaceId}
@@ -426,6 +436,7 @@ export default function TreeNode({
                 {/* Context menu */}
                 <ContextMenuContent className="w-56 rounded-xl border border-border-subtle shadow-lg p-1.5">
                     {/* Assignee submenu */}
+                    {!isTemp && (
                     <ContextMenuSub>
                         <ContextMenuSubTrigger className={`${TREE_CONFIG.fontSize} gap-2 rounded-lg px-2 py-1.5`}>
                             <AssigneeCtxIcon />
@@ -438,11 +449,12 @@ export default function TreeNode({
                                 assignedUserIds={assigneeMap[node.id] ?? []}
                                 users={mondayUsers}
                                 plan={plan}
-                                onAssigneesChange={onAssigneesChange}
+                                onAssigneesChange={isMultiSelected ? (_, userIds) => onBulkAssigneesChange(userIds) : onAssigneesChange}
                                 onClose={() => { }}
                             />
                         </ContextMenuSubContent>
                     </ContextMenuSub>
+                    )}
 
                     {/* Status submenu */}
                     <ContextMenuSub>
@@ -454,7 +466,7 @@ export default function TreeNode({
                             <StatusPickerContent
                                 taskId={node.id}
                                 current={node.status as Status | null}
-                                onSelect={onStatusChange}
+                                onSelect={isMultiSelected ? (_, status) => onBulkStatusChange(status) : onStatusChange}
                                 onClose={() => { }}
                             />
                         </ContextMenuSubContent>
@@ -470,7 +482,7 @@ export default function TreeNode({
                             <PriorityPickerContent
                                 taskId={node.id}
                                 current={(node.priority ?? 'no_priority') as Priority}
-                                onSelect={onPriorityChange}
+                                onSelect={isMultiSelected ? (_, priority) => onBulkPriorityChange(priority) : onPriorityChange}
                                 onClose={() => { }}
                             />
                         </ContextMenuSubContent>
@@ -486,9 +498,9 @@ export default function TreeNode({
                             <LabelPickerContent
                                 taskId={node.id}
                                 plan={plan}
-                                assignedLabelIds={labelMap[node.id] ?? []}
+                                assignedLabelIds={isMultiSelected ? [] : (labelMap[node.id] ?? [])}
                                 labels={labels}
-                                onLabelsChange={onLabelsChange}
+                                onLabelsChange={isMultiSelected ? (_, labelIds) => onBulkLabelsChange(labelIds) : onLabelsChange}
                                 onCreateLabel={onCreateLabel}
                                 onClose={() => {}}
                             />
@@ -497,18 +509,22 @@ export default function TreeNode({
 
                     <ContextMenuSeparator />
 
-                    <ContextMenuItem className={`${TREE_CONFIG.fontSize} gap-2 rounded-lg`} onClick={startEditing}>
-                        <PencilIcon /> Rename
-                    </ContextMenuItem>
-                    <ContextMenuItem className={`${TREE_CONFIG.fontSize} gap-2 rounded-lg`} onClick={() => onAddChild(node.id)}>
-                        <SubitemIcon /> Add subtask
-                    </ContextMenuItem>
+                    {!isMultiSelected && (
+                        <ContextMenuItem className={`${TREE_CONFIG.fontSize} gap-2 rounded-lg`} onClick={startEditing}>
+                            <PencilIcon /> Rename
+                        </ContextMenuItem>
+                    )}
+                    {!isMultiSelected && (
+                        <ContextMenuItem className={`${TREE_CONFIG.fontSize} gap-2 rounded-lg`} onClick={() => onAddChild(node.id)}>
+                            <SubitemIcon /> Add subtask
+                        </ContextMenuItem>
+                    )}
                     <ContextMenuSeparator />
                     <ContextMenuItem
                         className={`${TREE_CONFIG.fontSize} gap-2 rounded-lg`}
                         onClick={() => onDelete(node.id, hasChildren)}
                     >
-                        <TrashIcon /> Delete{hasChildren ? ' task & subtasks' : ''}
+                        <TrashIcon /> Delete{isMultiSelected ? ` ${selectedIds.size} tasks` : hasChildren ? ' task & subtasks' : ''}
                     </ContextMenuItem>
                 </ContextMenuContent>
             </ContextMenu>
@@ -556,6 +572,10 @@ export default function TreeNode({
                             onLabelPickerClose={onLabelPickerClose}
                             onLabelsChange={onLabelsChange}
                             onCreateLabel={onCreateLabel}
+                            onBulkStatusChange={onBulkStatusChange}
+                            onBulkPriorityChange={onBulkPriorityChange}
+                            onBulkLabelsChange={onBulkLabelsChange}
+                            onBulkAssigneesChange={onBulkAssigneesChange}
                         />
                     ))}
                 </div>
