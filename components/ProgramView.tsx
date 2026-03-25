@@ -130,7 +130,8 @@ function BoardCard({ board, tasks, rollupMap, mondayUsers, assigneeMap, onRemove
   const totalTasks = tasks.length;
   const doneTasks = tasks.filter((t) => t.status === 'done').length;
   const progress = totalTasks === 0 ? 0 : Math.round((doneTasks / totalTasks) * 100);
-  const totalHours = tasks.reduce((sum, t) => sum + (t.estimate_hours ?? 0), 0);
+  const parentIds = new Set(tasks.map((t) => t.parent_task_id).filter(Boolean));
+  const totalHours = tasks.filter((t) => !parentIds.has(t.id)).reduce((sum, t) => sum + (t.estimate_hours ?? 0), 0);
   const overdueCount = tasks.filter((t) => t.status !== 'done' && isOverdue(t.due_date)).length;
   const unassignedCount = tasks.filter((t) => (assigneeMap[t.id] ?? []).length === 0 && t.status !== 'done').length;
   const nextDue = nearestFutureDue(tasks);
@@ -384,7 +385,8 @@ function SummaryStrip({ allTasks, assigneeMap, memberBoards }: SummaryStripProps
   const done = allTasks.filter((t) => t.status === 'done').length;
   const overdue = allTasks.filter((t) => t.status !== 'done' && isOverdue(t.due_date)).length;
   const unassigned = allTasks.filter((t) => (assigneeMap[t.id] ?? []).length === 0 && t.status !== 'done').length;
-  const totalHours = allTasks.reduce((sum, t) => sum + (t.estimate_hours ?? 0), 0);
+  const parentIds = new Set(allTasks.map((t) => t.parent_task_id).filter(Boolean));
+  const totalHours = allTasks.filter((t) => !parentIds.has(t.id)).reduce((sum, t) => sum + (t.estimate_hours ?? 0), 0);
   const progress = total === 0 ? 0 : Math.round((done / total) * 100);
 
   const stats: { label: string; value: string | number; warn: boolean }[] = [

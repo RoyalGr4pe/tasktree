@@ -65,12 +65,23 @@ export default function WorkloadView({ tasks, assigneeMap, mondayUsers }: Worklo
     });
   }, [tasks, bucket]);
 
+  // Build a set of task IDs that have children — their estimate is a rollup, don't count directly
+  const parentIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const task of tasks) {
+      if (task.parent_task_id) ids.add(task.parent_task_id);
+    }
+    return ids;
+  }, [tasks]);
+
   // Compute per-user workload
   const userWorkloads = useMemo(() => {
     const hours = new Map<string, number>();
     const taskCount = new Map<string, number>();
 
     for (const task of filteredTasks) {
+      // Skip parent tasks — their estimate is covered by their children
+      if (parentIds.has(task.id)) continue;
       const assignees = assigneeMap[task.id] ?? [];
       const estimate = task.estimate_hours ?? 0;
       for (const uid of assignees) {
@@ -79,9 +90,10 @@ export default function WorkloadView({ tasks, assigneeMap, mondayUsers }: Worklo
       }
     }
 
-    // Collect all assigned user IDs
+    // Collect all assigned user IDs (leaf tasks only)
     const allAssignedIds = new Set<string>();
     for (const task of filteredTasks) {
+      if (parentIds.has(task.id)) continue;
       for (const uid of assigneeMap[task.id] ?? []) allAssignedIds.add(uid);
     }
 
@@ -97,13 +109,15 @@ export default function WorkloadView({ tasks, assigneeMap, mondayUsers }: Worklo
 
   const maxHours = Math.max(...userWorkloads.map((w) => w.hours), WEEKLY_CAPACITY);
 
+  const leafTasks = useMemo(() => filteredTasks.filter((t) => !parentIds.has(t.id)), [filteredTasks, parentIds]);
+
   const unassignedCount = useMemo(() => {
-    return filteredTasks.filter((t) => (assigneeMap[t.id] ?? []).length === 0).length;
-  }, [filteredTasks, assigneeMap]);
+    return leafTasks.filter((t) => (assigneeMap[t.id] ?? []).length === 0).length;
+  }, [leafTasks, assigneeMap]);
 
   const totalHours = useMemo(
-    () => filteredTasks.reduce((sum, t) => sum + (t.estimate_hours ?? 0), 0),
-    [filteredTasks]
+    () => leafTasks.reduce((sum, t) => sum + (t.estimate_hours ?? 0), 0),
+    [leafTasks]
   );
 
   return (

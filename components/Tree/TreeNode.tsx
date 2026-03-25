@@ -166,6 +166,13 @@ export default function TreeNode({
 
     const [isEditingEstimate, setIsEditingEstimate] = useState(false);
     const [estimateValue, setEstimateValue] = useState(String(node.estimate_hours ?? ''));
+
+    const nodeRollup = rollupMap.get(node.id);
+    const nodeHasChildren = nodeRollup ? nodeRollup.child_count > 0 : false;
+    // If the task has children, show the sum of children's estimates rather than its own stored value
+    const displayedEstimate = nodeHasChildren
+        ? (nodeRollup!.total_estimated_hours > 0 ? nodeRollup!.total_estimated_hours : null)
+        : (node.estimate_hours ?? null);
     const estimateInputRef = useRef<HTMLInputElement>(null);
 
     const commitEstimate = useCallback(() => {
@@ -458,14 +465,14 @@ export default function TreeNode({
                             ) : (
                                 <button
                                     onClick={() => { setEstimateValue(String(node.estimate_hours ?? '')); setIsEditingEstimate(true); }}
-                                    className={`flex items-center gap-1 h-7 hover:bg-node-hover px-2 rounded-full border-[0.5px] border-table-secondary transition-colors text-sm font-medium text-table-foreground ${!node.estimate_hours ? 'opacity-70' : ''}`}
-                                    title="Set estimate"
+                                    className={`flex items-center gap-1 h-7 hover:bg-node-hover px-2 rounded-full border-[0.5px] border-table-secondary transition-colors text-sm font-medium text-table-foreground ${!displayedEstimate ? 'opacity-70' : ''}`}
+                                    title={nodeHasChildren ? 'Rolled up from subtasks' : 'Set estimate'}
                                 >
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                         <circle cx="12" cy="12" r="10" />
                                         <polyline points="12 6 12 12 16 14" strokeLinecap="round" strokeLinejoin="round" />
                                     </svg>
-                                    <span>{node.estimate_hours ? `${node.estimate_hours}h` : 'Est'}</span>
+                                    <span>{displayedEstimate ? `${displayedEstimate}h` : 'Est'}</span>
                                 </button>
                             )}
                         </div>
