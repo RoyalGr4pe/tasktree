@@ -25,6 +25,7 @@ import TreeNode from './TreeNode';
 import DragLayer from './DragLayer';
 import FilterBar, { EMPTY_FILTERS, type ActiveFilters } from './FilterBar';
 import DependencyGraph from '@/components/DependencyGraph';
+import WorkloadView from '@/components/WorkloadView';
 import PlanLimitBanner from '@/components/PlanLimitBanner';
 import {
   AlertDialog,
@@ -102,8 +103,8 @@ export default function Tree({ initialTasks, board, workspace, onBack, onBoardRe
 
   // Dependencies: map of taskId → taskIds it depends on
   const [dependencyMap, setDependencyMap] = useState<DependencyMap>({});
-  // View mode: tree list or dependency graph
-  const [viewMode, setViewMode] = useState<'tree' | 'graph'>('tree');
+  // View mode: tree list, dependency graph, or workload
+  const [viewMode, setViewMode] = useState<'tree' | 'graph' | 'workload'>('tree');
 
   // Fetch monday users + all assignees + labels on mount
   useEffect(() => {
@@ -856,6 +857,15 @@ setLabels(body.labels ?? []);
                   <path strokeLinecap="round" strokeWidth={1.5} d="M7 11.5l10-5M7 12.5l10 5" />
                 </svg>
               </button>
+              <button
+                onClick={() => setViewMode('workload')}
+                title="Resource load"
+                className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${viewMode === 'workload' ? 'bg-surface text-monday-dark shadow-sm' : 'text-icon-muted hover:text-monday-dark'}`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </button>
             </div>
 
             <button
@@ -885,6 +895,15 @@ setLabels(body.labels ?? []);
               dependencyMap={dependencyMap}
               onAddDependency={handleAddDependency}
               onRemoveDependency={handleRemoveDependency}
+            />
+          )}
+
+          {/* Workload view */}
+          {viewMode === 'workload' && (
+            <WorkloadView
+              tasks={tasks}
+              assigneeMap={assigneeMap}
+              mondayUsers={mondayUsers}
             />
           )}
 
