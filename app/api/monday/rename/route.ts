@@ -9,9 +9,9 @@ import { renameItem } from '@/lib/monday';
 // ---------------------------------------------------------------------------
 
 export async function PATCH(request: NextRequest) {
-  const token = process.env.MONDAY_API_TOKEN ?? request.headers.get('x-monday-token');
+  const token = process.env.MONDAY_API_TOKEN;
   if (!token) {
-    return NextResponse.json({ error: 'Missing monday API token' }, { status: 401 });
+    return NextResponse.json({ error: 'Server misconfiguration: missing monday API token' }, { status: 500 });
   }
 
   let body: { board_id: string; item_id: string; name: string };

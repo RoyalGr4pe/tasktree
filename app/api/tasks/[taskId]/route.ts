@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import type { DbTask } from '@/lib/supabase';
 import { toClientTask } from '../route';
+import { getWorkspaceId } from '@/lib/api-auth';
 
 // ---------------------------------------------------------------------------
 // PATCH /api/tasks/[taskId]
@@ -13,6 +14,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ taskId: string }> }
 ) {
+  const { workspaceId, error: authError } = getWorkspaceId(request);
+  if (authError) return authError;
+
   const { taskId } = await params;
 
   let body: Partial<{
@@ -50,6 +54,7 @@ export async function PATCH(
     .from('tasks')
     .update(updates)
     .eq('id', taskId)
+    .eq('workspace_id', workspaceId)
     .select()
     .single();
 
@@ -67,10 +72,25 @@ export async function PATCH(
 // ---------------------------------------------------------------------------
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ taskId: string }> }
 ) {
+  const { workspaceId, error: authError } = getWorkspaceId(request);
+  if (authError) return authError;
+
   const { taskId } = await params;
+
+  // Verify the root task belongs to the caller's workspace before doing anything
+  const { data: rootTask } = await supabaseAdmin
+    .from('tasks')
+    .select('id')
+    .eq('id', taskId)
+    .eq('workspace_id', workspaceId)
+    .single();
+
+  if (!rootTask) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
 
   // Collect all descendant IDs via BFS
   const idsToDelete: string[] = [];

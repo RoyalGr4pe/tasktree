@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Routes that don't require auth (none currently — all API routes need it)
+// Routes that don't require auth
 const PUBLIC_PREFIXES = [
   '/_next',
   '/favicon',
-  '/api/monday', // legacy monday sync routes use their own token mechanism
 ];
 
 export async function proxy(request: NextRequest) {
@@ -41,36 +40,40 @@ export async function proxy(request: NextRequest) {
   }
 
   try {
-    // Manual HS256 verification — jose's jwtVerify can choke on monday's non-standard exp format
-    const [headerB64, payloadB64, signatureB64] = token.split('.');
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      return NextResponse.json({ error: 'Unauthorized: malformed token' }, { status: 401 });
+    }
+    const [headerB64, payloadB64, signatureB64] = parts;
     const { createHmac } = await import('crypto');
     const message = `${headerB64}.${payloadB64}`;
 
-    const secrets: Record<string, string> = {};
-    if (clientSecret) secrets.clientUtf8 = createHmac('sha256', clientSecret).update(message).digest('base64url');
-    if (clientSecret) secrets.clientHex = createHmac('sha256', Buffer.from(clientSecret, 'hex')).update(message).digest('base64url');
-    if (signingSecret) secrets.signingUtf8 = createHmac('sha256', signingSecret).update(message).digest('base64url');
-    if (signingSecret) secrets.signingHex = createHmac('sha256', Buffer.from(signingSecret, 'hex')).update(message).digest('base64url');
+    // Monday.com signs session tokens with the client secret as a plain UTF-8 string
+    const secret = clientSecret ?? signingSecret!;
+    const expected = createHmac('sha256', secret).update(message).digest('base64url');
 
-    console.error('[proxy] actual sig:', signatureB64.slice(0, 10), 'candidates:', Object.fromEntries(Object.entries(secrets).map(([k, v]) => [k, v.slice(0, 10)])));
-
-    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
-    const expectedSig = Object.values(secrets).find(s => s === signatureB64);
-
-    if (!expectedSig) {
-      console.error('[proxy] signature mismatch — got:', signatureB64.slice(0, 10));
+    if (expected !== signatureB64) {
       return NextResponse.json({ error: 'Unauthorized: invalid or expired token' }, { status: 401 });
     }
 
-    const dat = payload.dat as { account_id?: number } | undefined;
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+
+    // Check token expiry
+    if (typeof payload.exp === 'number' && Date.now() / 1000 > payload.exp) {
+      return NextResponse.json({ error: 'Unauthorized: token expired' }, { status: 401 });
+    }
+
+    const dat = payload.dat as { account_id?: number; user_id?: number } | undefined;
     if (typeof dat?.account_id !== 'number') {
-      console.error('[proxy] invalid payload:', payload);
       return NextResponse.json({ error: 'Unauthorized: invalid token payload' }, { status: 401 });
     }
 
-    // Inject the verified accountId as a header so route handlers can trust it
+    // Inject verified identity headers so route handlers can trust them
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set('x-verified-workspace-id', String(dat.account_id));
+    if (typeof dat.user_id === 'number') {
+      requestHeaders.set('x-verified-user-id', String(dat.user_id));
+    }
 
     return NextResponse.next({ request: { headers: requestHeaders } });
   } catch (err) {

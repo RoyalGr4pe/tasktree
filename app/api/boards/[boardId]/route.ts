@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import type { DbBoard } from '@/lib/supabase';
+import { getWorkspaceId } from '@/lib/api-auth';
 
 // ---------------------------------------------------------------------------
 // PATCH /api/boards/[boardId]
@@ -12,6 +13,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ boardId: string }> }
 ) {
+  const { workspaceId, error: authError } = getWorkspaceId(request);
+  if (authError) return authError;
+
   const { boardId } = await params;
 
   let body: { name: string };
@@ -29,6 +33,7 @@ export async function PATCH(
     .from('boards')
     .update({ name: body.name.trim() })
     .eq('id', boardId)
+    .eq('workspace_id', workspaceId)
     .select()
     .single();
 
@@ -46,15 +51,19 @@ export async function PATCH(
 // ---------------------------------------------------------------------------
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ boardId: string }> }
 ) {
+  const { workspaceId, error: authError } = getWorkspaceId(request);
+  if (authError) return authError;
+
   const { boardId } = await params;
 
   const { error } = await supabaseAdmin
     .from('boards')
     .delete()
-    .eq('id', boardId);
+    .eq('id', boardId)
+    .eq('workspace_id', workspaceId);
 
   if (error) {
     console.error('[DELETE /api/boards/[boardId]] Error:', error);
