@@ -21,14 +21,14 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const signingSecret = process.env.MONDAY_SIGNING_SECRET;
+  const clientSecret = process.env.MONDAY_CLIENT_SECRET;
 
-  // In development without a signing secret, allow through (dev fallback in route handlers)
-  if (!signingSecret) {
+  // In development without a client secret, allow through (dev fallback in route handlers)
+  if (!clientSecret) {
     if (process.env.NODE_ENV === 'development') {
       return NextResponse.next();
     }
-    return NextResponse.json({ error: 'Server misconfiguration: missing signing secret' }, { status: 500 });
+    return NextResponse.json({ error: 'Server misconfiguration: missing client secret' }, { status: 500 });
   }
 
   // Extract token from Authorization header or x-monday-session-token
@@ -41,7 +41,7 @@ export async function proxy(request: NextRequest) {
   }
 
   try {
-    const key = new TextEncoder().encode(signingSecret);
+    const key = new TextEncoder().encode(clientSecret);
     const { payload } = await jwtVerify(token, key, { algorithms: ['HS256'] });
 
     const dat = payload.dat as { account_id?: number } | undefined;
