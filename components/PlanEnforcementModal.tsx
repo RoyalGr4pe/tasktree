@@ -1,34 +1,41 @@
 'use client';
 
 import { useState } from 'react';
-import type { Board, Workspace } from '@/types';
-import { PLAN_LIMITS } from '@/lib/plan-limits';
+import { apiFetch } from '@/lib/api-fetch';
+import type { Board, Workspace, Program } from '@/types';
+import { PLAN_LIMITS, UPGRADE_URL } from '@/lib/plan-limits';
 
 interface Violation {
-  type: 'boards' | 'tasks';
+  type: 'boards' | 'tasks' | 'portfolios';
   current: number;
   limit: number;
-  board?: Board; // set when type === 'tasks'
+  board?: Board;       // set when type === 'tasks'
+  programs?: Program[]; // set when type === 'portfolios'
 }
 
 interface PlanEnforcementModalProps {
   workspace: Workspace;
   boards: Board[];
+  programs: Program[];
   /** taskCountByBoardId: map of boardId → task count */
   taskCountByBoardId: Record<string, number>;
   onBoardDeleted: (boardId: string) => void;
+  onProgramDeleted: (programId: string) => void;
   onResolvedGoToBoard: (board: Board) => void;
 }
 
 export default function PlanEnforcementModal({
   workspace,
   boards,
+  programs,
   taskCountByBoardId,
   onBoardDeleted,
+  onProgramDeleted,
   onResolvedGoToBoard,
 }: PlanEnforcementModalProps) {
   const limits = PLAN_LIMITS[workspace.plan];
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingProgramId, setDeletingProgramId] = useState<string | null>(null);
 
   // Compute all active violations
   const violations: Violation[] = [];
@@ -44,15 +51,29 @@ export default function PlanEnforcementModal({
     }
   }
 
+  if (limits.maxPrograms !== Infinity && programs.length > limits.maxPrograms) {
+    violations.push({ type: 'portfolios', current: programs.length, limit: limits.maxPrograms, programs });
+  }
+
   if (violations.length === 0) return null;
 
   async function deleteBoard(boardId: string) {
     setDeletingId(boardId);
     try {
-      await fetch(`/api/boards/${boardId}`, { method: 'DELETE' });
+      await apiFetch(`/api/boards/${boardId}`, { method: 'DELETE' });
       onBoardDeleted(boardId);
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function deleteProgram(programId: string) {
+    setDeletingProgramId(programId);
+    try {
+      await apiFetch(`/api/programs/${programId}`, { method: 'DELETE' });
+      onProgramDeleted(programId);
+    } finally {
+      setDeletingProgramId(null);
     }
   }
 
@@ -93,6 +114,13 @@ export default function PlanEnforcementModal({
                   deletingId={deletingId}
                   onDelete={deleteBoard}
                 />
+              ) : v.type === 'portfolios' ? (
+                <PortfolioViolation
+                  programs={v.programs!}
+                  limit={v.limit}
+                  deletingId={deletingProgramId}
+                  onDelete={deleteProgram}
+                />
               ) : (
                 <TaskViolation
                   board={v.board!}
@@ -111,7 +139,7 @@ export default function PlanEnforcementModal({
             Upgrade to {nextPlan} to unlock higher limits.
           </p>
           <a
-            href="https://tasktree.salkaro.com/pricing"
+            href={UPGRADE_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="shrink-0 px-4 py-1.5 text-xs font-semibold text-white bg-monday-blue rounded-lg hover:bg-monday-blue-hover transition-colors"
@@ -225,5 +253,63 @@ function TaskViolation({
       </div>
       <span className="text-xs text-monday-error font-medium shrink-0">{current} / {limit}</span>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Portfolio violation — list portfolios over limit, let user delete them
+// ---------------------------------------------------------------------------
+
+function PortfolioViolation({
+  programs,
+  limit,
+  deletingId,
+  onDelete,
+}: {
+  programs: Program[];
+  limit: number;
+  deletingId: string | null;
+  onDelete: (id: string) => void;
+}) {
+  const excess = programs.length - limit;
+
+  return (
+    <>
+      <div className="flex items-center gap-2 mb-3">
+        <svg className="w-4 h-4 text-monday-error shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
+        <p className="text-xs font-semibold text-monday-dark">
+          Too many portfolios — delete {excess} portfolio{excess !== 1 ? 's' : ''}
+        </p>
+        <span className="ml-auto text-xs text-monday-error font-medium">{programs.length} / {limit}</span>
+      </div>
+      <ul className="flex flex-col gap-1.5">
+        {programs.map((program) => (
+          <li key={program.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-surface-overlay border border-border-subtle">
+            <span className="flex-1 text-xs font-medium text-monday-dark truncate">{program.name}</span>
+            <button
+              onClick={() => onDelete(program.id)}
+              disabled={deletingId === program.id}
+              className="shrink-0 flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-monday-error border border-monday-error/30 rounded-md hover:bg-monday-error/10 transition-colors disabled:opacity-40"
+            >
+              {deletingId === program.id ? (
+                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
+              ) : (
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              )}
+              Delete
+            </button>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }

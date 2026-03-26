@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { apiFetch } from '@/lib/api-fetch';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -41,7 +42,7 @@ export default function CreateBoardModal({
     setError(null);
 
     try {
-      const res = await fetch('/api/boards', {
+      const res = await apiFetch('/api/boards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ workspace_id: workspace.id, name: name.trim() }),

@@ -14,6 +14,19 @@ export interface Workspace {
 // Board
 // ---------------------------------------------------------------------------
 
+export interface ProgramBoard {
+  board_id: string;
+  position: number;
+}
+
+export interface Program {
+  id: string;
+  workspace_id: string;
+  name: string;
+  created_at: string;
+  program_boards: ProgramBoard[];
+}
+
 export interface Board {
   id: string;
   workspace_id: string;
@@ -39,12 +52,40 @@ export interface Task {
   priority: Priority | null;
   status: Status | null;
   due_date: string | null;
+  estimate_hours?: number | null;
   created_at: string;
   linked_monday_item_id: string | null;
 
   // Aliases kept for tree-utils.ts compatibility (mapped at API boundary)
   parent_node_id: string | null;  // === parent_task_id
   name: string;                   // === title
+}
+
+// ---------------------------------------------------------------------------
+// Dependencies
+// ---------------------------------------------------------------------------
+
+export interface TaskDependency {
+  id: string;
+  task_id: string;           // the dependent task (this task is blocked until depends_on is done)
+  depends_on_task_id: string; // the blocking task
+  created_at: string;
+}
+
+// Map of taskId → IDs it depends on (blocking tasks)
+export type DependencyMap = Record<string, string[]>;
+
+// ---------------------------------------------------------------------------
+// Rollups — computed client-side from direct children
+// ---------------------------------------------------------------------------
+
+export interface TaskRollup {
+  progress_percent: number;       // 0–100
+  total_estimated_hours: number;  // sum of child estimate_hours
+  rolled_up_due_date: string | null;   // max(child.due_date)
+  aggregated_status: Status | 'mixed' | null;
+  child_count: number;
+  done_count: number;
 }
 
 export interface TreeTask extends Task {
@@ -78,6 +119,7 @@ export interface MondayContext {
   workspaceId: string;   // monday account_id
   userId: string;
   theme?: 'light' | 'dark' | 'black' | 'hacker';
+  sessionToken?: string; // signed JWT from monday — used to authenticate API requests
 }
 
 // ---------------------------------------------------------------------------

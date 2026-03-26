@@ -168,9 +168,9 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Missing node_id query parameter' }, { status: 400 });
   }
 
-  const token = process.env.MONDAY_API_TOKEN ?? request.headers.get('x-monday-token');
+  const token = process.env.MONDAY_API_TOKEN;
   if (!token) {
-    return NextResponse.json({ error: 'Missing monday API token' }, { status: 401 });
+    return NextResponse.json({ error: 'Server misconfiguration: missing monday API token' }, { status: 500 });
   }
 
   // Collect the node and all descendants by walking the tree in Supabase.

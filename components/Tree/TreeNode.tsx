@@ -14,7 +14,7 @@ import {
     ContextMenuSubTrigger,
     ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import type { TreeTask, MondayUser, Plan } from '@/types';
+import type { TreeTask, MondayUser, Plan, TaskRollup, DependencyMap } from '@/types';
 import { TREE_CONFIG } from '@/config/tree';
 import AssigneeAvatars from '@/components/AssigneeAvatars';
 import AssigneePicker, { AssigneePickerContent } from '@/components/AssigneePicker';
@@ -23,6 +23,8 @@ import StatusPicker, { StatusPickerContent, type Status, STATUSES, StatusDot } f
 import { DueDatePicker, formatDueDate, isDueDateOverdue } from '@/components/DueDatePicker';
 import { HiCalendar } from "react-icons/hi2";
 import LabelPicker, { LabelPickerContent, LabelChip, type Label } from '@/components/LabelPicker';
+import RollupBadges from '@/components/RollupBadges';
+import { DependencyPickerContent } from '@/components/DependencyPicker';
 
 
 interface TreeNodeProps {
@@ -72,6 +74,15 @@ interface TreeNodeProps {
     onBulkPriorityChange: (priority: Priority) => void;
     onBulkLabelsChange: (labelIds: string[]) => void;
     onBulkAssigneesChange: (userIds: string[]) => void;
+    // Rollups
+    rollupMap: Map<string, TaskRollup>;
+    onEstimateChange: (taskId: string, hours: number | null) => void;
+    // Dependencies
+    dependencyMap: DependencyMap;
+    blockedIds: Set<string>;
+    allTasksFlat: { id: string; title: string }[];
+    onAddDependency: (taskId: string, dependsOnId: string) => void;
+    onRemoveDependency: (taskId: string, dependsOnId: string) => void;
 }
 
 // ── Context menu helpers ────────────────────────────────────────────────────
@@ -139,12 +150,42 @@ export default function TreeNode({
     onBulkPriorityChange,
     onBulkLabelsChange,
     onBulkAssigneesChange,
+    rollupMap,
+    onEstimateChange,
+    dependencyMap,
+    blockedIds,
+    allTasksFlat,
+    onAddDependency,
+    onRemoveDependency,
 }: TreeNodeProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState(node.title ?? '');
     const [isSaving, setIsSaving] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const justFocusedRef = useRef(false);
+
+    const [isEditingEstimate, setIsEditingEstimate] = useState(false);
+    const [estimateValue, setEstimateValue] = useState(String(node.estimate_hours ?? ''));
+
+    const nodeRollup = rollupMap.get(node.id);
+    const nodeHasChildren = nodeRollup ? nodeRollup.child_count > 0 : false;
+    // If the task has children, show the sum of children's estimates rather than its own stored value
+    const displayedEstimate = nodeHasChildren
+        ? (nodeRollup!.total_estimated_hours > 0 ? nodeRollup!.total_estimated_hours : null)
+        : (node.estimate_hours ?? null);
+    const estimateInputRef = useRef<HTMLInputElement>(null);
+
+    const commitEstimate = useCallback(() => {
+        setIsEditingEstimate(false);
+        const raw = estimateValue.trim();
+        const parsed = raw === '' ? null : parseFloat(raw);
+        const current = node.estimate_hours ?? null;
+        if (parsed === current || (parsed !== null && isNaN(parsed))) {
+            setEstimateValue(String(node.estimate_hours ?? ''));
+            return;
+        }
+        onEstimateChange(node.id, parsed);
+    }, [estimateValue, node.estimate_hours, node.id, onEstimateChange]);
 
     useEffect(() => {
         if (editingNodeId === node.id) {
@@ -218,6 +259,7 @@ export default function TreeNode({
     const isMultiSelected = selectedIds.size > 1 && selectedIds.has(node.id);
     const isTemp = node.id.startsWith('__temp__');
     const hasChildren = node.children.length > 0;
+    const isBlocked = blockedIds.has(node.id);
     const isExpanded = node.isExpanded !== false;
     const isDropTarget = activeDropTargetId === node.id;
     const dueDateLabel = formatDueDate(node.due_date ?? null);
@@ -301,6 +343,18 @@ export default function TreeNode({
                             )}
                         </div>
 
+                        {/* Blocked indicator */}
+                        {isBlocked && (
+                            <div
+                                className="shrink-0 ml-1 flex items-center justify-center w-5 h-5 rounded text-monday-error"
+                                title={`Blocked — waiting on ${(dependencyMap[node.id] ?? []).length} unfinished task(s)`}
+                            >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M18 11V8A6 6 0 006 8v3H4v11h16V11h-2zm-8-3a4 4 0 018 0v3H10V8zm2 8.7V18h-2v-1.3a2 2 0 112 0z" />
+                                </svg>
+                            </div>
+                        )}
+
                         {/* Name */}
                         <div className="flex-1 min-w-0 mx-2 flex items-center">
                             {isEditing ? (
@@ -325,12 +379,21 @@ export default function TreeNode({
                             )}
                         </div>
 
+
                         {/* Collapsed child count badge */}
                         {hasChildren && !isExpanded && (
                             <span className={`shrink-0 ${TREE_CONFIG.badgeFontSize} font-medium bg-badge-bg rounded-full px-1.5 py-0.5 leading-none`}>
                                 {node.children.length}
                             </span>
                         )}
+
+                        {/* Rollup circle — far right, only on parent tasks */}
+                        {hasChildren && rollupMap.has(node.id) && (
+                            <div className="shrink-0 mr-2">
+                                <RollupBadges rollup={rollupMap.get(node.id)!} />
+                            </div>
+                        )}
+
 
                         {/* Labels */}
                         {(labelMap[node.id] ?? []).length > 0 && (
@@ -380,6 +443,39 @@ export default function TreeNode({
                             />
                         </div>
 
+
+                        {/* Estimate hours */}
+                        <div className="shrink-0 mx-2">
+                            {isEditingEstimate ? (
+                                <input
+                                    ref={estimateInputRef}
+                                    type="number"
+                                    min="0"
+                                    step="0.5"
+                                    value={estimateValue}
+                                    onChange={(e) => setEstimateValue(e.target.value)}
+                                    onBlur={commitEstimate}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') { e.preventDefault(); commitEstimate(); }
+                                        if (e.key === 'Escape') { setIsEditingEstimate(false); setEstimateValue(String(node.estimate_hours ?? '')); }
+                                    }}
+                                    className="w-16 h-7 px-2 text-sm font-medium text-monday-dark bg-transparent border border-monday-blue rounded-full outline-none text-center"
+                                    autoFocus
+                                />
+                            ) : (
+                                <button
+                                    onClick={() => { setEstimateValue(String(node.estimate_hours ?? '')); setIsEditingEstimate(true); }}
+                                    className={`flex items-center gap-1 h-7 hover:bg-node-hover px-2 rounded-full border-[0.5px] border-table-secondary transition-colors text-sm font-medium text-table-foreground ${!displayedEstimate ? 'opacity-70' : ''}`}
+                                    title={nodeHasChildren ? 'Rolled up from subtasks' : 'Set estimate'}
+                                >
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <circle cx="12" cy="12" r="10" />
+                                        <polyline points="12 6 12 12 16 14" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                    <span>{displayedEstimate ? `${displayedEstimate}h` : 'Est'}</span>
+                                </button>
+                            )}
+                        </div>
 
                         {/* Assignee avatars */}
                         <div className="shrink-0 mx-2">
@@ -507,6 +603,29 @@ export default function TreeNode({
                         </ContextMenuSubContent>
                     </ContextMenuSub>
 
+                    {/* Dependencies */}
+                    {!isMultiSelected && !isTemp && (
+                        <ContextMenuSub>
+                            <ContextMenuSubTrigger className={`${TREE_CONFIG.fontSize} gap-2 rounded-lg px-2 py-1.5`}>
+                                <DependencyIcon />
+                                <span className="flex-1">Dependencies</span>
+                                {(dependencyMap[node.id] ?? []).length > 0 && (
+                                    <span className="text-xs text-icon-muted">{(dependencyMap[node.id] ?? []).length}</span>
+                                )}
+                            </ContextMenuSubTrigger>
+                            <ContextMenuSubContent className="w-64 rounded-xl border border-border-subtle shadow-lg p-0 overflow-hidden">
+                                <DependencyPickerContent
+                                    taskId={node.id}
+                                    allTasksFlat={allTasksFlat}
+                                    dependencyMap={dependencyMap}
+                                    onAddDependency={onAddDependency}
+                                    onRemoveDependency={onRemoveDependency}
+                                    onClose={() => {}}
+                                />
+                            </ContextMenuSubContent>
+                        </ContextMenuSub>
+                    )}
+
                     <ContextMenuSeparator />
 
                     {!isMultiSelected && (
@@ -576,6 +695,13 @@ export default function TreeNode({
                             onBulkPriorityChange={onBulkPriorityChange}
                             onBulkLabelsChange={onBulkLabelsChange}
                             onBulkAssigneesChange={onBulkAssigneesChange}
+                            rollupMap={rollupMap}
+                            onEstimateChange={onEstimateChange}
+                            dependencyMap={dependencyMap}
+                            blockedIds={blockedIds}
+                            allTasksFlat={allTasksFlat}
+                            onAddDependency={onAddDependency}
+                            onRemoveDependency={onRemoveDependency}
                         />
                     ))}
                 </div>
@@ -609,6 +735,17 @@ function SubitemIcon() {
         <svg className={`${TREE_CONFIG.iconSize} shrink-0`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 18h6M12 15V3M5 3h14" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 10l4 4-4 4" />
+        </svg>
+    );
+}
+
+function DependencyIcon() {
+    return (
+        <svg className={`${TREE_CONFIG.iconSize} shrink-0`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="5" cy="12" r="2" fill="currentColor" stroke="none" />
+            <circle cx="19" cy="5" r="2" fill="currentColor" stroke="none" />
+            <circle cx="19" cy="19" r="2" fill="currentColor" stroke="none" />
+            <path strokeLinecap="round" strokeWidth={1.5} d="M7 11.5l10-5M7 12.5l10 5" />
         </svg>
     );
 }

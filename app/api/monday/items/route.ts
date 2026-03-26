@@ -17,11 +17,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing board_id query parameter' }, { status: 400 });
   }
 
-  // Use the server-side API token — more reliable than the SDK session token
-  // which is a short-lived JWT not accepted by the REST API directly.
-  const token = process.env.MONDAY_API_TOKEN ?? request.headers.get('x-monday-token');
+  const token = process.env.MONDAY_API_TOKEN;
   if (!token) {
-    return NextResponse.json({ error: 'Missing monday API token' }, { status: 401 });
+    return NextResponse.json({ error: 'Server misconfiguration: missing monday API token' }, { status: 500 });
   }
 
   try {
@@ -42,9 +40,9 @@ export async function GET(request: NextRequest) {
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
-  const token = process.env.MONDAY_API_TOKEN ?? request.headers.get('x-monday-token');
+  const token = process.env.MONDAY_API_TOKEN;
   if (!token) {
-    return NextResponse.json({ error: 'Missing monday API token' }, { status: 401 });
+    return NextResponse.json({ error: 'Server misconfiguration: missing monday API token' }, { status: 500 });
   }
 
   let body: { board_id: string; parent_node_id?: string | null; name: string };

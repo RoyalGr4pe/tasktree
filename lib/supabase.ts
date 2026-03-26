@@ -70,6 +70,14 @@ export type DbTask = {
   priority: string | null;
   status: string | null;
   due_date: string | null;
+  estimate_hours: number | null;
   created_at: string;
   linked_monday_item_id: string | null;
+};
+
+export type DbTaskDependency = {
+  id: string;
+  task_id: string;
+  depends_on_task_id: string;
+  created_at: string;
 };

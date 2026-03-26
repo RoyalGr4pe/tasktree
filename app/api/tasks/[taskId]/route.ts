@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import type { DbTask } from '@/lib/supabase';
 import { toClientTask } from '../route';
+import { getWorkspaceId } from '@/lib/api-auth';
 
 // ---------------------------------------------------------------------------
 // PATCH /api/tasks/[taskId]
@@ -13,6 +14,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ taskId: string }> }
 ) {
+  const { workspaceId, error: authError } = getWorkspaceId(request);
+  if (authError) return authError;
+
   const { taskId } = await params;
 
   let body: Partial<{
@@ -23,6 +27,7 @@ export async function PATCH(
     priority: string | null;
     status: string | null;
     due_date: string | null;
+    estimate_hours: number | null;
   }>;
 
   try {
@@ -39,6 +44,7 @@ export async function PATCH(
   if (body.priority !== undefined)      updates.priority       = body.priority;
   if (body.status !== undefined)        updates.status         = body.status;
   if (body.due_date !== undefined)      updates.due_date       = body.due_date;
+  if (body.estimate_hours !== undefined) updates.estimate_hours = body.estimate_hours;
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
@@ -48,6 +54,7 @@ export async function PATCH(
     .from('tasks')
     .update(updates)
     .eq('id', taskId)
+    .eq('workspace_id', workspaceId)
     .select()
     .single();
 
@@ -65,10 +72,25 @@ export async function PATCH(
 // ---------------------------------------------------------------------------
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ taskId: string }> }
 ) {
+  const { workspaceId, error: authError } = getWorkspaceId(request);
+  if (authError) return authError;
+
   const { taskId } = await params;
+
+  // Verify the root task belongs to the caller's workspace before doing anything
+  const { data: rootTask } = await supabaseAdmin
+    .from('tasks')
+    .select('id')
+    .eq('id', taskId)
+    .eq('workspace_id', workspaceId)
+    .single();
+
+  if (!rootTask) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
 
   // Collect all descendant IDs via BFS
   const idsToDelete: string[] = [];
