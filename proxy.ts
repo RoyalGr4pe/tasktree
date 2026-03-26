@@ -44,13 +44,14 @@ export async function proxy(request: NextRequest) {
     const key = new TextEncoder().encode(signingSecret);
     const { payload } = await jwtVerify(token, key, { algorithms: ['HS256'] });
 
-    if (typeof payload.accountId !== 'number') {
+    const dat = payload.dat as { account_id?: number } | undefined;
+    if (typeof dat?.account_id !== 'number') {
       return NextResponse.json({ error: 'Unauthorized: invalid token payload' }, { status: 401 });
     }
 
     // Inject the verified accountId as a header so route handlers can trust it
     const requestHeaders = new Headers(request.headers);
-    requestHeaders.set('x-verified-workspace-id', String(payload.accountId));
+    requestHeaders.set('x-verified-workspace-id', String(dat.account_id));
 
     return NextResponse.next({ request: { headers: requestHeaders } });
   } catch {

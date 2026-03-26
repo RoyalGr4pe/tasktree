@@ -64,34 +64,41 @@ async function getSdkContext(): Promise<MondayContext> {
   const mondaySdk = (await import('monday-sdk-js')).default;
   const monday = mondaySdk();
 
-  const ctx = await new Promise<MondayContext>((resolve, reject) => {
-    monday.listen('context', (res: { data: Record<string, unknown> }) => {
-      const accountId = (res.data?.account as { id?: unknown } | undefined)?.id;
-      const userId = res.data?.user as string | undefined;
+  // Get the session token directly — it contains account_id and user_id in its payload
+  const tokenRes = await monday.get('sessionToken') as { data: string };
+  const sessionToken = tokenRes?.data;
 
-      if (!accountId) {
-        reject(new Error('monday SDK context missing account id'));
-        return;
-      }
-
-      resolve({
-        workspaceId: String(accountId),
-        userId: userId ? String(userId) : 'unknown',
-        theme: res.data?.theme as MondayContext['theme'],
-        sessionToken: res.data?.sessionToken as string | undefined,
-      });
-    });
-  });
-
-  // sessionToken is not reliably present in the context event — fetch it explicitly
-  if (!ctx.sessionToken) {
-    try {
-      const tokenRes = await monday.execute('getSessionToken') as { data: string };
-      if (tokenRes?.data) ctx.sessionToken = tokenRes.data;
-    } catch {
-      // not available in this context — proceed without it
-    }
+  if (!sessionToken) {
+    throw new Error('monday SDK did not return a session token');
   }
 
-  return ctx;
+  // Decode the JWT payload (dat.account_id, dat.user_id) without verifying — verification
+  // happens server-side in the middleware with the signing secret.
+  const payloadB64 = sessionToken.split('.')[1];
+  const dat = JSON.parse(atob(payloadB64)).dat as { account_id: number; user_id: number };
+
+  if (!dat?.account_id) {
+    throw new Error('monday session token missing account_id');
+  }
+
+  // Also get theme from context if available
+  let theme: MondayContext['theme'];
+  try {
+    const ctxRes = await Promise.race([
+      new Promise<{ data: Record<string, unknown> }>((resolve) => {
+        monday.listen('context', (res: { data: Record<string, unknown> }) => resolve(res));
+      }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(), 1000)),
+    ]);
+    theme = ctxRes.data?.theme as MondayContext['theme'];
+  } catch {
+    // theme is non-critical
+  }
+
+  return {
+    workspaceId: String(dat.account_id),
+    userId: String(dat.user_id),
+    theme,
+    sessionToken,
+  };
 }
