@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { jwtVerify } from 'jose';
 
 // Routes that don't require auth (none currently — all API routes need it)
 const PUBLIC_PREFIXES = [
@@ -41,11 +40,22 @@ export async function proxy(request: NextRequest) {
   }
 
   try {
-    const key = new TextEncoder().encode(clientSecret);
-    const { payload } = await jwtVerify(token, key, { algorithms: ['HS256'] });
+    // Manual HS256 verification — jose's jwtVerify can choke on monday's non-standard exp format
+    const [headerB64, payloadB64, signatureB64] = token.split('.');
+    const { createHmac } = await import('crypto');
+    const expectedSig = createHmac('sha256', clientSecret)
+      .update(`${headerB64}.${payloadB64}`)
+      .digest('base64url');
 
+    if (expectedSig !== signatureB64) {
+      console.error('[proxy] signature mismatch');
+      return NextResponse.json({ error: 'Unauthorized: invalid or expired token' }, { status: 401 });
+    }
+
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
     const dat = payload.dat as { account_id?: number } | undefined;
     if (typeof dat?.account_id !== 'number') {
+      console.error('[proxy] invalid payload:', payload);
       return NextResponse.json({ error: 'Unauthorized: invalid token payload' }, { status: 401 });
     }
 
@@ -55,7 +65,7 @@ export async function proxy(request: NextRequest) {
 
     return NextResponse.next({ request: { headers: requestHeaders } });
   } catch (err) {
-    console.error('[proxy] JWT verify failed:', err instanceof Error ? err.message : err, 'token prefix:', token.slice(0, 20));
+    console.error('[proxy] JWT verify failed:', err instanceof Error ? err.message : err);
     return NextResponse.json({ error: 'Unauthorized: invalid or expired token' }, { status: 401 });
   }
 }
