@@ -47,12 +47,15 @@ export async function proxy(request: NextRequest) {
       .update(`${headerB64}.${payloadB64}`)
       .digest('base64url');
 
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    console.error('[proxy] token payload:', JSON.stringify(payload));
+    console.error('[proxy] clientSecret length:', clientSecret.length, 'first6:', clientSecret.slice(0, 6));
+
     if (expectedSig !== signatureB64) {
-      console.error('[proxy] signature mismatch');
+      console.error('[proxy] signature mismatch — expected:', expectedSig.slice(0, 10), 'got:', signatureB64.slice(0, 10));
       return NextResponse.json({ error: 'Unauthorized: invalid or expired token' }, { status: 401 });
     }
 
-    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
     const dat = payload.dat as { account_id?: number } | undefined;
     if (typeof dat?.account_id !== 'number') {
       console.error('[proxy] invalid payload:', payload);
