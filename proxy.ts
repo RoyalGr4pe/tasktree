@@ -54,7 +54,8 @@ export async function proxy(request: NextRequest) {
     requestHeaders.set('x-verified-workspace-id', String(dat.account_id));
 
     return NextResponse.next({ request: { headers: requestHeaders } });
-  } catch {
+  } catch (err) {
+    console.error('[proxy] JWT verify failed:', err instanceof Error ? err.message : err, 'token prefix:', token.slice(0, 20));
     return NextResponse.json({ error: 'Unauthorized: invalid or expired token' }, { status: 401 });
   }
 }
