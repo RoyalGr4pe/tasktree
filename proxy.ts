@@ -58,7 +58,7 @@ export async function proxy(request: NextRequest) {
     const expectedSig = Object.values(secrets).find(s => s === signatureB64);
 
     if (!expectedSig) {
-      console.error('[proxy] signature mismatch — expected:', expectedSig.slice(0, 10), 'got:', signatureB64.slice(0, 10));
+      console.error('[proxy] signature mismatch — got:', signatureB64.slice(0, 10));
       return NextResponse.json({ error: 'Unauthorized: invalid or expired token' }, { status: 401 });
     }
 
