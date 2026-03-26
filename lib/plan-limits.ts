@@ -11,7 +11,7 @@ export interface PlanLimits {
 
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   free: {
-    maxBoards: 2,
+    maxBoards: 1,
     maxTasksPerBoard: 100,
     maxDepth: 3,
     maxPrograms: 1,
