@@ -43,9 +43,15 @@ export async function proxy(request: NextRequest) {
     // Manual HS256 verification — jose's jwtVerify can choke on monday's non-standard exp format
     const [headerB64, payloadB64, signatureB64] = token.split('.');
     const { createHmac } = await import('crypto');
-    const expectedSig = createHmac('sha256', clientSecret)
+    // Try both UTF-8 and hex-decoded interpretations of the secret
+    const sigUtf8 = createHmac('sha256', clientSecret)
       .update(`${headerB64}.${payloadB64}`)
       .digest('base64url');
+    const sigHex = createHmac('sha256', Buffer.from(clientSecret, 'hex'))
+      .update(`${headerB64}.${payloadB64}`)
+      .digest('base64url');
+    const expectedSig = sigUtf8;
+    console.error('[proxy] sigUtf8:', sigUtf8.slice(0, 10), 'sigHex:', sigHex.slice(0, 10), 'actual:', signatureB64.slice(0, 10));
 
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
     console.error('[proxy] token payload:', JSON.stringify(payload));
