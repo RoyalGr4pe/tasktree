@@ -19,8 +19,8 @@ export async function getMondayContext(timeoutMs = 3000): Promise<MondayContext>
     const urlUserId = params.get('userId');
     const urlSessionToken = params.get('sessionToken');
 
-    if (urlAccountId) {
-      if (urlSessionToken) setSessionToken(urlSessionToken);
+    if (urlAccountId && urlSessionToken) {
+      setSessionToken(urlSessionToken);
       return {
         workspaceId: urlAccountId,
         userId: urlUserId ?? 'unknown',
@@ -64,7 +64,7 @@ async function getSdkContext(): Promise<MondayContext> {
   const mondaySdk = (await import('monday-sdk-js')).default;
   const monday = mondaySdk();
 
-  return new Promise((resolve, reject) => {
+  const ctx = await new Promise<MondayContext>((resolve, reject) => {
     monday.listen('context', (res: { data: Record<string, unknown> }) => {
       const accountId = (res.data?.account as { id?: unknown } | undefined)?.id;
       const userId = res.data?.user as string | undefined;
@@ -82,4 +82,16 @@ async function getSdkContext(): Promise<MondayContext> {
       });
     });
   });
+
+  // sessionToken is not reliably present in the context event — fetch it explicitly
+  if (!ctx.sessionToken) {
+    try {
+      const tokenRes = await monday.execute('getSessionToken') as { data: string };
+      if (tokenRes?.data) ctx.sessionToken = tokenRes.data;
+    } catch {
+      // not available in this context — proceed without it
+    }
+  }
+
+  return ctx;
 }
