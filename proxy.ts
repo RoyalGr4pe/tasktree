@@ -21,9 +21,10 @@ export async function proxy(request: NextRequest) {
   }
 
   const clientSecret = process.env.MONDAY_CLIENT_SECRET;
+  const signingSecret = process.env.MONDAY_SIGNING_SECRET;
 
-  // In development without a client secret, allow through (dev fallback in route handlers)
-  if (!clientSecret) {
+  // In development without secrets, allow through (dev fallback in route handlers)
+  if (!clientSecret && !signingSecret) {
     if (process.env.NODE_ENV === 'development') {
       return NextResponse.next();
     }
@@ -43,21 +44,20 @@ export async function proxy(request: NextRequest) {
     // Manual HS256 verification — jose's jwtVerify can choke on monday's non-standard exp format
     const [headerB64, payloadB64, signatureB64] = token.split('.');
     const { createHmac } = await import('crypto');
-    // Try both UTF-8 and hex-decoded interpretations of the secret
-    const sigUtf8 = createHmac('sha256', clientSecret)
-      .update(`${headerB64}.${payloadB64}`)
-      .digest('base64url');
-    const sigHex = createHmac('sha256', Buffer.from(clientSecret, 'hex'))
-      .update(`${headerB64}.${payloadB64}`)
-      .digest('base64url');
-    const expectedSig = sigUtf8;
-    console.error('[proxy] sigUtf8:', sigUtf8.slice(0, 10), 'sigHex:', sigHex.slice(0, 10), 'actual:', signatureB64.slice(0, 10));
+    const message = `${headerB64}.${payloadB64}`;
+
+    const secrets: Record<string, string> = {};
+    if (clientSecret) secrets.clientUtf8 = createHmac('sha256', clientSecret).update(message).digest('base64url');
+    if (clientSecret) secrets.clientHex = createHmac('sha256', Buffer.from(clientSecret, 'hex')).update(message).digest('base64url');
+    if (signingSecret) secrets.signingUtf8 = createHmac('sha256', signingSecret).update(message).digest('base64url');
+    if (signingSecret) secrets.signingHex = createHmac('sha256', Buffer.from(signingSecret, 'hex')).update(message).digest('base64url');
+
+    console.error('[proxy] actual sig:', signatureB64.slice(0, 10), 'candidates:', Object.fromEntries(Object.entries(secrets).map(([k, v]) => [k, v.slice(0, 10)])));
 
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
-    console.error('[proxy] token payload:', JSON.stringify(payload));
-    console.error('[proxy] clientSecret length:', clientSecret.length, 'first6:', clientSecret.slice(0, 6));
+    const expectedSig = Object.values(secrets).find(s => s === signatureB64);
 
-    if (expectedSig !== signatureB64) {
+    if (!expectedSig) {
       console.error('[proxy] signature mismatch — expected:', expectedSig.slice(0, 10), 'got:', signatureB64.slice(0, 10));
       return NextResponse.json({ error: 'Unauthorized: invalid or expired token' }, { status: 401 });
     }
