@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { apiFetch } from '@/lib/api-fetch';
 import type { Program, Board, Task, TaskAssignee, MondayUser, TaskRollup } from '@/types';
 import { STATUSES } from '@/components/StatusPicker';
 import { computeRollups } from '@/lib/tree-utils';
@@ -441,7 +442,7 @@ export default function ProgramView({
   const [showAddPicker, setShowAddPicker] = useState(false);
 
   useEffect(() => {
-    fetch('/api/users')
+    apiFetch('/api/users')
       .then((r) => r.json())
       .then(({ users }) => setMondayUsers(users ?? []))
       .catch(() => {});
@@ -451,8 +452,8 @@ export default function ProgramView({
     setLoadingBoards((prev) => new Set(prev).add(boardId));
     try {
       const [tasksRes, assigneesRes] = await Promise.all([
-        fetch(`/api/tasks?board_id=${boardId}`),
-        fetch(`/api/tasks/assignees?board_id=${boardId}`),
+        apiFetch(`/api/tasks?board_id=${boardId}`),
+        apiFetch(`/api/tasks/assignees?board_id=${boardId}`),
       ]);
       const { tasks } = await tasksRes.json();
       const { assignees } = await assigneesRes.json();
@@ -491,7 +492,7 @@ export default function ProgramView({
 
   async function handleAddBoard(board: Board) {
     setMemberBoardIds((prev) => [...prev, board.id]);
-    await fetch(`/api/programs/${program.id}/boards`, {
+    await apiFetch(`/api/programs/${program.id}/boards`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ board_id: board.id }),
@@ -501,7 +502,7 @@ export default function ProgramView({
 
   async function handleRemoveBoard(boardId: string) {
     setMemberBoardIds((prev) => prev.filter((id) => id !== boardId));
-    await fetch(`/api/programs/${program.id}/boards?board_id=${boardId}`, { method: 'DELETE' })
+    await apiFetch(`/api/programs/${program.id}/boards?board_id=${boardId}`, { method: 'DELETE' })
       .catch((err) => console.error('[ProgramView] Failed to remove board:', err));
   }
 
@@ -510,7 +511,7 @@ export default function ProgramView({
     const trimmed = renameValue.trim();
     if (!trimmed || trimmed === programName) return;
     setProgramName(trimmed);
-    const res = await fetch(`/api/programs/${program.id}`, {
+    const res = await apiFetch(`/api/programs/${program.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: trimmed }),

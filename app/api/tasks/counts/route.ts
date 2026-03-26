@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getWorkspaceId } from '@/lib/api-auth';
 
 // ---------------------------------------------------------------------------
 // GET /api/tasks/counts?workspace_id=xxx
@@ -7,10 +8,8 @@ import { supabaseAdmin } from '@/lib/supabase';
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest) {
-  const workspaceId = request.nextUrl.searchParams.get('workspace_id');
-  if (!workspaceId) {
-    return NextResponse.json({ error: 'Missing workspace_id' }, { status: 400 });
-  }
+  const { workspaceId, error: authError } = getWorkspaceId(request);
+  if (authError) return authError;
 
   const { data, error } = await supabaseAdmin
     .from('tasks')

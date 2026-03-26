@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getWorkspaceId } from '@/lib/api-auth';
 
 // GET /api/programs?workspace_id=xxx
 export async function GET(request: NextRequest) {
-  const workspaceId = request.nextUrl.searchParams.get('workspace_id');
-  if (!workspaceId) return NextResponse.json({ error: 'Missing workspace_id' }, { status: 400 });
+  const { workspaceId, error: authError } = getWorkspaceId(request);
+  if (authError) return authError;
 
   const { data: programs, error } = await supabaseAdmin
     .from('programs')
@@ -17,13 +18,16 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ programs: programs ?? [] });
 }
 
-// POST /api/programs  { workspace_id, name }
+// POST /api/programs  { name }
 export async function POST(request: NextRequest) {
-  let body: { workspace_id: string; name: string };
+  const { workspaceId: workspace_id, error: authError } = getWorkspaceId(request);
+  if (authError) return authError;
+
+  let body: { name: string };
   try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
-  const { workspace_id, name } = body;
-  if (!workspace_id || !name?.trim()) return NextResponse.json({ error: 'workspace_id and name required' }, { status: 400 });
+  const { name } = body;
+  if (!name?.trim()) return NextResponse.json({ error: 'name required' }, { status: 400 });
 
   const { data, error } = await supabaseAdmin
     .from('programs')

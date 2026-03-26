@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import type { DbTask, DbWorkspace } from '@/lib/supabase';
 import { isTaskLimitReached, isDepthLimitReached } from '@/lib/plan-limits';
 import type { Plan } from '@/types';
+import { getWorkspaceId } from '@/lib/api-auth';
 
 // ---------------------------------------------------------------------------
 // GET /api/tasks?board_id=xxx
@@ -40,9 +41,11 @@ export async function GET(request: NextRequest) {
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
+  const { workspaceId: workspace_id, error: authError } = getWorkspaceId(request);
+  if (authError) return authError;
+
   let body: {
     board_id: string;
-    workspace_id: string;
     parent_task_id?: string | null;
     title?: string;
     status?: string | null;
@@ -54,10 +57,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { board_id, workspace_id, parent_task_id, title, status } = body;
+  const { board_id, parent_task_id, title, status } = body;
 
-  if (!board_id || !workspace_id) {
-    return NextResponse.json({ error: 'board_id and workspace_id are required' }, { status: 400 });
+  if (!board_id) {
+    return NextResponse.json({ error: 'board_id is required' }, { status: 400 });
   }
 
   // Get workspace plan

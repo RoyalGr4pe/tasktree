@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { apiFetch } from '@/lib/api-fetch';
 import CreateBoardModal from './CreateBoardModal';
 import {
     AlertDialog,
@@ -104,7 +105,7 @@ export default function BoardSelector({
         const trimmed = renameValue.trim();
         setRenamingId(null);
         if (!trimmed || trimmed === board.name) return;
-        const res = await fetch(`/api/boards/${board.id}`, {
+        const res = await apiFetch(`/api/boards/${board.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: trimmed }),
@@ -117,7 +118,7 @@ export default function BoardSelector({
 
     async function confirmDelete(boardId: string) {
         setPendingDeleteId(null);
-        await fetch(`/api/boards/${boardId}`, { method: 'DELETE' });
+        await apiFetch(`/api/boards/${boardId}`, { method: 'DELETE' });
         onBoardDeleted(boardId);
     }
 
@@ -125,7 +126,7 @@ export default function BoardSelector({
         const trimmed = renameProgramValue.trim();
         setRenamingProgramId(null);
         if (!trimmed || trimmed === program.name) return;
-        const res = await fetch(`/api/programs/${program.id}`, {
+        const res = await apiFetch(`/api/programs/${program.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: trimmed }),
@@ -138,7 +139,7 @@ export default function BoardSelector({
 
     async function confirmDeleteProgram(programId: string) {
         setPendingDeleteProgramId(null);
-        await fetch(`/api/programs/${programId}`, { method: 'DELETE' });
+        await apiFetch(`/api/programs/${programId}`, { method: 'DELETE' });
         onProgramDeleted(programId);
     }
 
@@ -184,7 +185,7 @@ export default function BoardSelector({
                                 </button>
                             </div>
                         ) : (
-                            <div className="rounded-lg border border-border-subtle overflow-hidden">
+                            <div className="rounded-lg overflow-hidden">
                                 <Table>
                                     <TableHeader>
                                         <TableRow className="bg-badge-bg/50 hover:bg-badge-bg/50">
@@ -297,7 +298,7 @@ export default function BoardSelector({
                             )}
                         </div>
 
-                        <div className="rounded-lg border border-border-subtle overflow-hidden">
+                        <div className="rounded-lg overflow-hidden">
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-badge-bg/50 hover:bg-badge-bg/50">

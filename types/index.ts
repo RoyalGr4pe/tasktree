@@ -119,6 +119,7 @@ export interface MondayContext {
   workspaceId: string;   // monday account_id
   userId: string;
   theme?: 'light' | 'dark' | 'black' | 'hacker';
+  sessionToken?: string; // signed JWT from monday — used to authenticate API requests
 }
 
 // ---------------------------------------------------------------------------

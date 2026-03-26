@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { apiFetch } from '@/lib/api-fetch';
 import type { Board, Workspace, Program } from '@/types';
 import { PLAN_LIMITS, UPGRADE_URL } from '@/lib/plan-limits';
 
@@ -59,7 +60,7 @@ export default function PlanEnforcementModal({
   async function deleteBoard(boardId: string) {
     setDeletingId(boardId);
     try {
-      await fetch(`/api/boards/${boardId}`, { method: 'DELETE' });
+      await apiFetch(`/api/boards/${boardId}`, { method: 'DELETE' });
       onBoardDeleted(boardId);
     } finally {
       setDeletingId(null);
@@ -69,7 +70,7 @@ export default function PlanEnforcementModal({
   async function deleteProgram(programId: string) {
     setDeletingProgramId(programId);
     try {
-      await fetch(`/api/programs/${programId}`, { method: 'DELETE' });
+      await apiFetch(`/api/programs/${programId}`, { method: 'DELETE' });
       onProgramDeleted(programId);
     } finally {
       setDeletingProgramId(null);

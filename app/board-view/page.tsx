@@ -9,6 +9,7 @@ import ProgramView from '@/components/ProgramView';
 import type { Board, Task, Workspace, Program } from '@/types';
 import { PLAN_LIMITS } from '@/lib/plan-limits';
 import LoadingOne from '@/components/ui/loading';
+import { apiFetch } from '@/lib/api-fetch';
 
 const Tree = dynamic(() => import('@/components/Tree/Tree'), {
   ssr: false,
@@ -81,7 +82,7 @@ export default function BoardViewPage() {
     const ctx = await getMondayContext();
 
     // 2. Bootstrap workspace (upserts on first visit)
-    const wsRes = await fetch(`/api/workspaces?workspace_id=${encodeURIComponent(ctx.workspaceId)}`);
+    const wsRes = await apiFetch(`/api/workspaces?workspace_id=${encodeURIComponent(ctx.workspaceId)}`);
     if (!wsRes.ok) {
       const err = await wsRes.json().catch(() => ({ error: wsRes.statusText }));
       throw new Error(`Failed to load workspace: ${err.error ?? wsRes.statusText}`);
@@ -90,7 +91,7 @@ export default function BoardViewPage() {
     setWorkspace(ws);
 
     // 3. Load boards
-    const boardsRes = await fetch(`/api/boards?workspace_id=${encodeURIComponent(ctx.workspaceId)}`);
+    const boardsRes = await apiFetch(`/api/boards?workspace_id=${encodeURIComponent(ctx.workspaceId)}`);
     if (!boardsRes.ok) {
       const err = await boardsRes.json().catch(() => ({ error: boardsRes.statusText }));
       throw new Error(`Failed to load boards: ${err.error ?? boardsRes.statusText}`);
@@ -99,14 +100,14 @@ export default function BoardViewPage() {
     setBoards(loadedBoards);
 
     // 4. Fetch task counts for all boards (for enforcement check)
-    const countsRes = await fetch(`/api/tasks/counts?workspace_id=${encodeURIComponent(ctx.workspaceId)}`);
+    const countsRes = await apiFetch(`/api/tasks/counts?workspace_id=${encodeURIComponent(ctx.workspaceId)}`);
     if (countsRes.ok) {
       const { counts } = await countsRes.json();
       setTaskCountByBoardId(counts ?? {});
     }
 
     // 4b. Load programs
-    const programsRes = await fetch(`/api/programs?workspace_id=${encodeURIComponent(ctx.workspaceId)}`);
+    const programsRes = await apiFetch(`/api/programs?workspace_id=${encodeURIComponent(ctx.workspaceId)}`);
     if (programsRes.ok) {
       const { programs: loadedPrograms } = await programsRes.json();
       setPrograms(loadedPrograms ?? []);
@@ -124,7 +125,7 @@ export default function BoardViewPage() {
     setSelectedBoard(board);
     setPhase('loading');
 
-    const tasksRes = await fetch(`/api/tasks?board_id=${encodeURIComponent(board.id)}`);
+    const tasksRes = await apiFetch(`/api/tasks?board_id=${encodeURIComponent(board.id)}`);
     if (!tasksRes.ok) {
       const err = await tasksRes.json().catch(() => ({ error: tasksRes.statusText }));
       throw new Error(`Failed to load tasks: ${err.error ?? tasksRes.statusText}`);
@@ -163,7 +164,7 @@ export default function BoardViewPage() {
 
   async function handleProgramCreated(name: string) {
     if (!workspace) return;
-    const res = await fetch('/api/programs', {
+    const res = await apiFetch('/api/programs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ workspace_id: workspace.id, name }),

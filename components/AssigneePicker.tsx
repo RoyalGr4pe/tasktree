@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { apiFetch } from '@/lib/api-fetch';
 import { createPortal } from 'react-dom';
 import type { MondayUser } from '@/types';
 import AssigneeIcon from './icons/assignee-icon';
@@ -41,7 +42,7 @@ export function AssigneePickerContent({
     for (const userId of [...assignedUserIds]) {
       setPending(userId);
       try {
-        const res = await fetch(`/api/tasks/${taskId}/assign/${userId}`, { method: 'DELETE' });
+        const res = await apiFetch(`/api/tasks/${taskId}/assign/${userId}`, { method: 'DELETE' });
         if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to unassign');
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -60,11 +61,11 @@ export function AssigneePickerContent({
     setPending(user.id);
     try {
       if (isAssigned) {
-        const res = await fetch(`/api/tasks/${taskId}/assign/${user.id}`, { method: 'DELETE' });
+        const res = await apiFetch(`/api/tasks/${taskId}/assign/${user.id}`, { method: 'DELETE' });
         if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to unassign');
         onAssigneesChange(taskId, assignedUserIds.filter((id) => id !== user.id));
       } else {
-        const res = await fetch(`/api/tasks/${taskId}/assign`, {
+        const res = await apiFetch(`/api/tasks/${taskId}/assign`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: user.id, workspaceId }),

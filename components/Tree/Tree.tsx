@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { apiFetch } from '@/lib/api-fetch';
 import {
   DndContext,
   DragEndEvent,
@@ -108,12 +109,12 @@ export default function Tree({ initialTasks, board, workspace, onBack, onBoardRe
 
   // Fetch monday users + all assignees + labels on mount
   useEffect(() => {
-    fetch('/api/users')
+    apiFetch('/api/users')
       .then((r) => r.json())
       .then(({ users }) => setMondayUsers(users ?? []))
       .catch((err) => console.error('[Tree] Failed to fetch users:', err));
 
-    fetch(`/api/tasks/assignees?board_id=${board.id}`)
+    apiFetch(`/api/tasks/assignees?board_id=${board.id}`)
       .then((r) => r.json())
       .then(({ assignees }: { assignees: (TaskAssignee & { task_id: string })[] }) => {
         const map: Record<string, string[]> = {};
@@ -125,7 +126,7 @@ export default function Tree({ initialTasks, board, workspace, onBack, onBoardRe
       })
       .catch((err) => console.error('[Tree] Failed to fetch assignees:', err));
 
-    fetch(`/api/labels?workspace_id=${workspace.id}`)
+    apiFetch(`/api/labels?workspace_id=${workspace.id}`)
       .then(async (r) => {
         const body = await r.json();
         if (!r.ok) { console.error('[Tree] Labels API error:', r.status, body); return; }
@@ -133,7 +134,7 @@ setLabels(body.labels ?? []);
       })
       .catch((err) => console.error('[Tree] Failed to fetch labels:', err));
 
-    fetch(`/api/task-labels?board_id=${board.id}`)
+    apiFetch(`/api/task-labels?board_id=${board.id}`)
       .then((r) => r.json())
       .then(({ taskLabels }: { taskLabels: { task_id: string; label_id: string }[] }) => {
         const map: Record<string, string[]> = {};
@@ -145,7 +146,7 @@ setLabels(body.labels ?? []);
       })
       .catch((err) => console.error('[Tree] Failed to fetch task labels:', err));
 
-    fetch(`/api/tasks/dependencies?board_id=${board.id}`)
+    apiFetch(`/api/tasks/dependencies?board_id=${board.id}`)
       .then((r) => r.json())
       .then(({ dependencies }: { dependencies: TaskDependency[] }) => {
         const map: DependencyMap = {};
@@ -160,7 +161,7 @@ setLabels(body.labels ?? []);
 
   const handleLabelsChange = useCallback(async (taskId: string, labelIds: string[]) => {
     setLabelMap((prev) => ({ ...prev, [taskId]: labelIds }));
-    await fetch('/api/task-labels', {
+    await apiFetch('/api/task-labels', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ task_id: taskId, board_id: board.id, label_ids: labelIds }),
@@ -168,7 +169,7 @@ setLabels(body.labels ?? []);
   }, [board.id]);
 
   const handleCreateLabel = useCallback(async (name: string, color: string): Promise<Label> => {
-    const res = await fetch('/api/labels', {
+    const res = await apiFetch('/api/labels', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ workspace_id: workspace.id, name, color }),
@@ -185,7 +186,7 @@ setLabels(body.labels ?? []);
   const handlePriorityChange = useCallback(async (taskId: string, priority: Priority) => {
     const normalised = priority === 'no_priority' ? null : priority;
     setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, priority: normalised } : t));
-    await fetch(`/api/tasks/${taskId}`, {
+    await apiFetch(`/api/tasks/${taskId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ priority: normalised }),
@@ -194,7 +195,7 @@ setLabels(body.labels ?? []);
 
   const handleStatusChange = useCallback(async (taskId: string, status: Status | null) => {
     setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status } : t));
-    await fetch(`/api/tasks/${taskId}`, {
+    await apiFetch(`/api/tasks/${taskId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
@@ -203,7 +204,7 @@ setLabels(body.labels ?? []);
 
   const handleDueDateChange = useCallback(async (taskId: string, due_date: string | null) => {
     setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, due_date } : t));
-    await fetch(`/api/tasks/${taskId}`, {
+    await apiFetch(`/api/tasks/${taskId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ due_date }),
@@ -216,7 +217,7 @@ setLabels(body.labels ?? []);
       ...prev,
       [taskId]: [...(prev[taskId] ?? []), dependsOnId],
     }));
-    const res = await fetch(`/api/tasks/${taskId}/dependencies`, {
+    const res = await apiFetch(`/api/tasks/${taskId}/dependencies`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ depends_on_task_id: dependsOnId }),
@@ -236,14 +237,14 @@ setLabels(body.labels ?? []);
       ...prev,
       [taskId]: (prev[taskId] ?? []).filter((id) => id !== dependsOnId),
     }));
-    await fetch(`/api/tasks/${taskId}/dependencies?depends_on_task_id=${dependsOnId}`, {
+    await apiFetch(`/api/tasks/${taskId}/dependencies?depends_on_task_id=${dependsOnId}`, {
       method: 'DELETE',
     }).catch((err) => console.error('[Tree] Failed to remove dependency:', err));
   }, []);
 
   const handleEstimateChange = useCallback(async (taskId: string, estimate_hours: number | null) => {
     setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, estimate_hours } : t));
-    await fetch(`/api/tasks/${taskId}`, {
+    await apiFetch(`/api/tasks/${taskId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ estimate_hours }),
@@ -254,7 +255,7 @@ setLabels(body.labels ?? []);
     const ids = [...selectedIds].filter((id) => !id.startsWith('__temp__'));
     setTasks((prev) => prev.map((t) => ids.includes(t.id) ? { ...t, status } : t));
     await Promise.all(ids.map((id) =>
-      fetch(`/api/tasks/${id}`, {
+      apiFetch(`/api/tasks/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
@@ -267,7 +268,7 @@ setLabels(body.labels ?? []);
     const ids = [...selectedIds].filter((id) => !id.startsWith('__temp__'));
     setTasks((prev) => prev.map((t) => ids.includes(t.id) ? { ...t, priority: normalised } : t));
     await Promise.all(ids.map((id) =>
-      fetch(`/api/tasks/${id}`, {
+      apiFetch(`/api/tasks/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ priority: normalised }),
@@ -283,7 +284,7 @@ setLabels(body.labels ?? []);
       return next;
     });
     await Promise.all(ids.map((id) =>
-      fetch('/api/task-labels', {
+      apiFetch('/api/task-labels', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task_id: id, board_id: board.id, label_ids: labelIds }),
@@ -305,14 +306,14 @@ setLabels(body.labels ?? []);
       // Remove users not in new list
       await Promise.all(
         current.filter((uid) => !userIds.includes(uid)).map((uid) =>
-          fetch(`/api/tasks/${taskId}/assign/${uid}`, { method: 'DELETE' })
+          apiFetch(`/api/tasks/${taskId}/assign/${uid}`, { method: 'DELETE' })
             .catch((err) => console.error('[Tree] Failed to bulk unassign:', taskId, uid, err))
         )
       );
       // Add users not already assigned
       await Promise.all(
         userIds.filter((uid) => !current.includes(uid)).map((uid) =>
-          fetch(`/api/tasks/${taskId}/assign`, {
+          apiFetch(`/api/tasks/${taskId}/assign`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: uid, workspaceId: workspace.id }),
@@ -569,7 +570,7 @@ setLabels(body.labels ?? []);
 
     setEditingNodeId(tempId);
 
-    const res = await fetch('/api/tasks', {
+    const res = await apiFetch('/api/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -640,7 +641,7 @@ setLabels(body.labels ?? []);
     try {
       await Promise.all(
         nodeIds.map(async (id) => {
-          const res = await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+          const res = await apiFetch(`/api/tasks/${id}`, { method: 'DELETE' });
           if (!res.ok) {
             const err = await res.json().catch(() => ({ error: res.statusText }));
             throw new Error(err.error ?? 'Delete failed');
@@ -664,7 +665,7 @@ setLabels(body.labels ?? []);
       );
 
       try {
-        const res = await fetch(`/api/tasks/${taskId}`, {
+        const res = await apiFetch(`/api/tasks/${taskId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ title: newTitle }),
@@ -699,7 +700,7 @@ setLabels(body.labels ?? []);
     setIsRenamingBoard(false);
     if (!trimmed || trimmed === boardName) return;
     setBoardName(trimmed);
-    const res = await fetch(`/api/boards/${board.id}`, {
+    const res = await apiFetch(`/api/boards/${board.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: trimmed }),
@@ -714,7 +715,7 @@ setLabels(body.labels ?? []);
 
   const confirmDeleteBoard = useCallback(async () => {
     setPendingDeleteBoard(false);
-    await fetch(`/api/boards/${board.id}`, { method: 'DELETE' });
+    await apiFetch(`/api/boards/${board.id}`, { method: 'DELETE' });
     onBoardDeleted(board.id);
   }, [board.id, onBoardDeleted]);
 
@@ -1070,7 +1071,7 @@ setLabels(body.labels ?? []);
 // ---------------------------------------------------------------------------
 
 async function patchTask(payload: PatchTaskPayload): Promise<void> {
-  const res = await fetch(`/api/tasks/${payload.id}`, {
+  const res = await apiFetch(`/api/tasks/${payload.id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getWorkspaceId } from '@/lib/api-auth';
 
 // ---------------------------------------------------------------------------
 // GET /api/labels?workspace_id=xxx
@@ -7,10 +8,8 @@ import { supabaseAdmin } from '@/lib/supabase';
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest) {
-  const workspaceId = request.nextUrl.searchParams.get('workspace_id');
-  if (!workspaceId) {
-    return NextResponse.json({ error: 'Missing workspace_id' }, { status: 400 });
-  }
+  const { workspaceId, error: authError } = getWorkspaceId(request);
+  if (authError) return authError;
 
   const { data, error } = await supabaseAdmin
     .from('labels')
@@ -62,16 +61,19 @@ export async function GET(request: NextRequest) {
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
-  let body: { workspace_id: string; name: string; color: string };
+  const { workspaceId: workspace_id, error: authError } = getWorkspaceId(request);
+  if (authError) return authError;
+
+  let body: { name: string; color: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { workspace_id, name, color } = body;
-  if (!workspace_id || !name?.trim() || !color) {
-    return NextResponse.json({ error: 'workspace_id, name, and color are required' }, { status: 400 });
+  const { name, color } = body;
+  if (!name?.trim() || !color) {
+    return NextResponse.json({ error: 'name and color are required' }, { status: 400 });
   }
 
   const { data, error } = await supabaseAdmin
