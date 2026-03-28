@@ -5,6 +5,7 @@ import { log } from '@/lib/logger';
 const PUBLIC_PREFIXES = [
   '/_next',
   '/favicon',
+  '/api/monday/webhook',  // called by monday.com, verified by HMAC signature instead
 ];
 
 export async function proxy(request: NextRequest) {

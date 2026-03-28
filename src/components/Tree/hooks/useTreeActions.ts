@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import mondaySdk from 'monday-sdk-js';
 import {
   createTask as createTaskRequest,
   patchTask as patchTaskFields,
@@ -236,6 +237,10 @@ export function useTreeActions({
 
     setTasks((prev) => prev.map((t) => t.id === tempId ? newTask : t));
     setEditingNodeId(newTask.id);
+
+    // Notify monday.com that the user derived value (tracked for adoption analytics)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mondaySdk() as any).execute('valueCreatedForUser');
   }
 
   const handleAddRoot = useCallback((status: Status | null = null) => {
