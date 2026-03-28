@@ -12,10 +12,14 @@ export async function GET(request: NextRequest) {
   const { workspaceId, error: authError } = getWorkspaceId(request);
   if (authError) return authError;
 
-  // Upsert workspace (creates with free plan on first visit)
+  // Upsert workspace (creates with free plan on first visit).
+  // Clears scheduled_for_deletion_at so a reinstall cancels a pending deletion.
   const { data, error } = await supabaseAdmin
     .from('workspaces')
-    .upsert({ id: workspaceId }, { onConflict: 'id', ignoreDuplicates: false })
+    .upsert(
+      { id: workspaceId, scheduled_for_deletion_at: null },
+      { onConflict: 'id', ignoreDuplicates: false }
+    )
     .select()
     .single();
 

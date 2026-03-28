@@ -8,6 +8,7 @@ export interface Workspace {
   id: string;          // monday.com account_id
   plan: Plan;
   created_at: string;
+  scheduled_for_deletion_at: string | null;
 }
 
 // ---------------------------------------------------------------------------

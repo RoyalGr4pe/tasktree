@@ -50,6 +50,7 @@ export type DbWorkspace = {
   id: string;
   plan: string;
   created_at: string;
+  scheduled_for_deletion_at: string | null;
 };
 
 export type DbBoard = {
